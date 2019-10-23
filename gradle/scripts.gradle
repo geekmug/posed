@@ -1,0 +1,77 @@
+/*
+ * Copyright (C) 2019, Scott Dial, All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/* Helper method to create CreateStartScripts tasks on the rootProject
+ * for a given Map<String, String> of name to mainClass, using the specified
+ * list of JVM options (jvmOpts). */
+ext.setStartScripts = { project, scripts, jvmOpts=null ->
+  if (!rootProject.hasProperty('startScripts')) {
+    apply plugin: 'application'
+    apply plugin: 'maven-publish'
+
+    /* We need to apply the "application" plugin to setup the project for
+     * creating application scripts, but since we want to generate tasks
+     * for several of them, we want to disable the default one to save
+     * confusion. */
+    startScripts { actions = [] }
+
+    // Configure our application tarball to be compressed by default
+    distTar.compression = Compression.BZIP2
+    distTar.extension = 'tbz2'
+    distTar.includeEmptyDirs = false
+
+    // Copy our application to the "dist" directory
+    task copyApplicationDistributionToDist(type: Copy, dependsOn: distTar) {
+      into rootProject.file('dist')
+      // Delay evaluation of archivePath to allow overriding the name
+      from { distTar.archivePath }
+    }
+    dist.dependsOn copyApplicationDistributionToDist
+
+    // Publish our application tarball to the maven repository
+    publishing {
+      publications {
+        ApplicationDistribution(MavenPublication) {
+          artifactId artifactBaseName
+          artifact distTar
+        }
+      }
+    }
+
+    distTar.baseName = artifactBaseName
+  }
+
+  /* Add project as a runtime dependency for the rootProject, so that
+   * all of the runtime dependencies for project are available within
+   * the rootProject application distribution. */
+  dependencies {
+    runtime project
+  }
+
+  scripts.each() { scriptName, className ->
+    def t = tasks.create(name: scriptName+'StartScript', type: CreateStartScripts) {
+      mainClassName = className
+      applicationName = scriptName
+      outputDir = new File(rootProject.buildDir, 'scripts')
+      classpath = project.jar.outputs.files + project.configurations.runtime
+      if (jvmOpts != null) {
+        defaultJvmOpts = jvmOpts
+      }
+    }
+    // Ensure sure the generated task is run
+    startScripts.dependsOn(t)
+  }
+}

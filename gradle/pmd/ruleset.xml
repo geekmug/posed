@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright (C) 2019, Scott Dial, All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<ruleset name="Custom"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 http://pmd.sourceforge.net/ruleset_2_0_0.xsd">
+  <description>
+Custom ruleset for our projects.
+  </description>
+
+  <rule ref="category/java/errorprone.xml/AvoidBranchingStatementAsLastInLoop" />
+  <rule ref="category/java/errorprone.xml/AvoidDecimalLiteralsInBigDecimalConstructor" />
+  <rule ref="category/java/errorprone.xml/AvoidMultipleUnaryOperators" />
+  <rule ref="category/java/errorprone.xml/AvoidUsingOctalValues" />
+  <rule ref="category/java/errorprone.xml/BrokenNullCheck" />
+  <rule ref="category/java/errorprone.xml/CheckSkipResult" />
+  <rule ref="category/java/errorprone.xml/ClassCastExceptionWithToArray" />
+  <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices" />
+  <rule ref="category/java/errorprone.xml/JumbledIncrementer" />
+  <rule ref="category/java/errorprone.xml/MisplacedNullCheck" />
+  <rule ref="category/java/errorprone.xml/OverrideBothEqualsAndHashcode" />
+  <rule ref="category/java/errorprone.xml/ReturnFromFinallyBlock" />
+  <rule ref="category/java/errorprone.xml/UnconditionalIfStatement" />
+
+  <rule ref="category/java/multithreading.xml/AvoidThreadGroup" />
+  <rule ref="category/java/multithreading.xml/DontCallThreadRun" />
+  <rule ref="category/java/multithreading.xml/DoubleCheckedLocking" />
+
+  <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP" />
+  <rule ref="category/java/bestpractices.xml/CheckResultSet" />
+
+  <rule ref="category/java/codestyle.xml/ExtendsObject" />
+  <rule ref="category/java/codestyle.xml/ForLoopShouldBeWhileLoop" />
+
+  <rule ref="category/java/performance.xml/BigIntegerInstantiation" />
+  <rule ref="category/java/performance.xml/BooleanInstantiation" />
+
+  <rule ref="category/java/design.xml/CollapsibleIfStatements" />
+  <rule ref="category/java/design.xml/SimplifiedTernary" />
+
+  <!-- custom rules -->
+  <rule name="DontThrowExceptionsFromMainRule"
+        language="java"
+        message="Do not throw exceptions from main methods, catch and handle them instead."
+        externalInfoUrl="https://softwareengineering.stackexchange.com/a/257184"
+        class="net.sourceforge.pmd.lang.rule.XPathRule">
+    <description>
+Don't throw exceptions from main methods, catch and handle them instead.
+Exceptions thrown from main methods are have an undefined behavior.
+    </description>
+    <properties>
+      <property name="xpath">
+        <value><![CDATA[
+          //MethodDeclaration[@Public='true' and @Static='true' and MethodDeclarator[@Image='main']]//NameList
+        ]]></value>
+      </property>
+    </properties>
+  </rule>
+</ruleset>

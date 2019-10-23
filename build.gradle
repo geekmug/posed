@@ -1,0 +1,53 @@
+/*
+ * Copyright (C) 2019, Scott Dial, All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+buildscript {
+  repositories {
+    maven {
+      url "${artifactory_contextUrl}/plugins-release"
+      credentials {
+        username = "${artifactory_user}"
+        password = "${artifactory_password}"
+      }
+    }
+  }
+
+  dependencies {
+    classpath group: 'ca.cutterslade.gradle', name: 'gradle-dependency-analyze', version: gradleDependencyAnalyzeVersion
+    classpath group: 'de.aaschmid', name: 'gradle-cpd-plugin', version: gradleCpdPluginVersion
+    classpath group: 'gradle.plugin.com.github.spotbugs', name: 'spotbugs-gradle-plugin', version: spotbugsGradlePluginVersion
+    classpath group: 'gradle.plugin.nl.javadude.gradle.plugins', name: 'license-gradle-plugin', version: licenseGradlePluginVersion
+    classpath group: 'net.ltgt.gradle', name: 'gradle-errorprone-plugin', version: errorpronePluginVersion
+    classpath group: 'org.asciidoctor', name: 'asciidoctor-gradle-plugin', version: asciidoctorGradlePluginVersion
+    classpath group: 'pl.allegro.tech.build', name: 'axion-release-plugin', version: axionReleasePluginVersion
+  }
+}
+
+ext {
+    // Make this extended task type available to all of the other gradle scripts
+    SpotBugsTask = com.github.spotbugs.SpotBugsTask
+}
+
+apply from: file('gradle/base.gradle')
+
+apply from: file('gradle/asciidoc.gradle')
+apply from: file('gradle/check.gradle')
+apply from: file('gradle/convention.gradle')
+apply from: file('gradle/javadoc.gradle')
+apply from: file('gradle/license.gradle')
+apply from: file('gradle/publish.gradle')
+apply from: file('gradle/repository.gradle')
+apply from: file('gradle/scripts.gradle')

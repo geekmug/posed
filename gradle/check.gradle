@@ -1,0 +1,373 @@
+/*
+ * Copyright (C) 2019, Scott Dial, All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Reporting utils.
+ *
+ * @author Vyacheslav Rusakov
+ * @since 16.11.2015
+ */
+class ReportUtils {
+    /**
+     * Resolve java package from provided absolute source path.
+     * Use configured java source roots to properly detect class package.
+     *
+     * @param project project instance
+     * @param type execution type (main or test)
+     * @param file absolute path to source file
+     * @return package for provided java class path
+     */
+    static String extractJavaPackage(Project project, String type, String file) {
+        String name = new File(file).canonicalPath
+        Closure search = { Iterable<File> files ->
+            files*.canonicalPath.find { String s -> name.startsWith(s) }
+        }
+        // try looking in java and then in groovy sources (mixed mode)
+        String root = search(project.sourceSets[type].java.srcDirs) ?: search(project.sourceSets[type].groovy.srcDirs)
+        if (root) {
+            name = name[root.length() + 1..-1] // remove sources dir prefix
+        }
+        name = name[0..name.lastIndexOf('.') - 1] // remove extension
+        name = name.replaceAll('\\\\|/', '.')
+        name[0..name.lastIndexOf('.') - 1] // remove class name
+
+    }
+
+    /**
+     * @param path absolute path to source file
+     * @return file name without path
+     */
+    static String extractFile(String path) {
+        int idx = path.replaceAll('\\\\', '/').lastIndexOf('/')
+        path[idx + 1..-1]
+    }
+
+    /**
+     * Unescapes html string.
+     * Uses XmlSlurper as the simplest way.
+     *
+     * @param html html
+     * @return raw string without html specific words
+     */
+    static String unescapeHtml(String html) {
+        new XmlSlurper().parseText("<t>${html.trim().replaceAll('\\&nbsp;', '')}</t>")
+    }
+
+    /**
+     * @param file file to resolve path
+     * @return canonical file path with '/' as separator and without leading slash for linux
+     */
+    static String noRootFilePath(File file) {
+        String path = file.canonicalPath.replaceAll('\\\\', '/')
+        path.startsWith('/') ? path[1..-1] : path
+    }
+
+    /**
+     * @param file file
+     * @return file link to use in console output
+     */
+    static String toConsoleLink(File file) {
+        return "file:///${noRootFilePath(file)}"
+    }
+}
+
+/**
+ * Prints SpotBugs errors (from xml report) into console.
+ * <p>
+ * Note: https://github.com/xvik/gradle-quality-plugin
+ * </p>
+ * @author Vyacheslav Rusakov
+ * @since 12.11.2015
+ */
+class SpotbugsReporter extends DefaultTask {
+  def type
+
+  Map<String, String> buildDescription(Node result) {
+    Map<String, String> desc = [:]
+    result.BugPattern.each { pattern ->
+      desc[pattern.@type] = pattern.Details.text()
+      //remove html tags
+      .replaceAll('<(.|\n)*?>', '')
+      // remove empty lines after tags remove (only one separator line remain)
+      .replaceAll('([ \t]*\n){3,}', '\n\n')
+      // reduce left indents
+      .replaceAll('\n\t+', '\n  ').replaceAll(' {2,}', '  ')
+      // indent all not indented lines
+      .replaceAll('\n([^\\s])', '\n  $1').trim()
+    }
+    return desc
+  }
+
+  Map<String, String> buildCategories(Node result) {
+    Map<String, String> cat = [:]
+    result.BugCategory.each { category ->
+      cat[category.@category] = category.Description.text()
+    }
+    return cat
+  }
+
+  @TaskAction
+  public void report() {
+    project.with {
+      File reportFile = file("${extensions.spotbugs.reportsDir}/${type}.xml")
+      if (!reportFile.exists()) {
+        return
+      }
+
+      Node result = new XmlParser().parse(reportFile)
+      int cnt = result.BugInstance.size()
+      if (cnt > 0) {
+        Node summary = result.FindBugsSummary[0]
+        int fileCnt = summary.FileStats.findAll { (it.@bugCount as Integer) > 0 }.size()
+        int p1 = summary.@priority_1 == null ? 0 : summary.@priority_1 as Integer
+        int p2 = summary.@priority_2 == null ? 0 : summary.@priority_2 as Integer
+        int p3 = summary.@priority_3 == null ? 0 : summary.@priority_3 as Integer
+        logger.error "$cnt ($p1 / $p2 / $p3) SpotBugs violations were found in ${fileCnt} files"
+
+        Map<String, String> desc = buildDescription(result)
+        Map<String, String> cat = buildCategories(result)
+        int id = 0;
+        result.BugInstance.each { bug ->
+          Node msg = bug.LongMessage[0]
+          Node src = bug.SourceLine[0]
+          String description = ReportUtils.unescapeHtml(desc[bug.@type])
+          String srcPosition = src.@start == src.@end ? src.@start : "${src.@start}-${src.@end}"
+          logger.error "Bug ${id}: [${cat[bug.@category]} | ${bug.@type}] ${src.@classname}:${srcPosition}  " +
+                       "(priority ${bug.@priority})" +
+                       "\n\t>> ${msg.text()}" +
+                       "\n  ${description}"
+          id++
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Prints pmd errors (from xml report) into console.
+ *
+ * @author Vyacheslav Rusakov
+ * @since 12.11.2015
+ */
+class PmdReporter extends DefaultTask {
+  def type
+
+  @TaskAction
+  void report() {
+    project.with {
+      File reportFile = file("${extensions.pmd.reportsDir}/${type}.xml")
+
+      if (!reportFile.exists()) {
+        return
+      }
+      Node result = new XmlParser().parse(reportFile)
+      int cnt = result.file.violation.size()
+      if (cnt > 0) {
+        int id = 0;
+        result.file.each { file ->
+          String filePath = file.@name
+          String sourceFile = ReportUtils.extractFile(filePath)
+          String name = ReportUtils.extractJavaPackage(project, type, filePath)
+          file.violation.each { violation ->
+            String srcPos = violation.@beginline
+            // part in braces recognized by intellij IDEA and shown as link
+            logger.error "Bug ${id}: [${violation.@ruleset} | ${violation.@rule}] ${violation.@package}.${violation.@class}:${srcPos}" +
+                         "\n  ${violation.text().trim()}" +
+                         "\n  ${violation.@externalInfoUrl}"
+            id++
+          }
+        }
+      }
+    }
+  }
+}
+
+// Export the reporters to allow adding additional sourcesets
+ext.SpotbugsReporter = SpotbugsReporter
+ext.PmdReporter = PmdReporter
+
+subprojects {
+  apply plugin: 'java'
+
+  // Checkstyle
+  apply plugin: 'checkstyle'
+  checkstyle {
+    toolVersion = checkstyleVersion
+    ignoreFailures = true
+    configFile = rootProject.file('gradle/checkstyle/checkstyle.xml')
+    configProperties = [
+      'checkstyle.importcontrol.file': rootProject.file('gradle/checkstyle/import-control.xml'),
+      'checkstyle.suppressions.file': rootProject.file('gradle/checkstyle/suppressions.xml'),
+    ]
+  }
+  dependencies {
+    checkstyle group: 'com.github.sevntu-checkstyle', name: 'sevntu-checks', version: sevntuChecksVersion
+    checkstyle group: 'com.puppycrawl.tools', name: 'checkstyle', version: checkstyleVersion
+  }
+
+  /* Configure checkstyle to have the compile dependencies as part of the
+   * classpath, so that the RedundantThrows check can work with custom
+   * Exceptions.
+   */
+  checkstyleMain {
+    classpath += configurations.compile
+  }
+  checkstyleTest {
+    classpath += configurations.testCompile
+  }
+
+  // SpotBugs
+  apply plugin: 'com.github.spotbugs'
+  spotbugs {
+    ignoreFailures = true
+    toolVersion = spotbugsVersion
+  }
+  dependencies {
+    spotbugsPlugins group: 'com.h3xstream.findsecbugs', name: 'findsecbugs-plugin', version: findsecbugsPluginVersion
+    spotbugsPlugins group: 'com.mebigfatguy.fb-contrib', name: 'fb-contrib', version: fbContribVersion
+  }
+
+  // Configure spotbugs tasks to report XML withMessages
+  tasks.withType(SpotBugsTask) { task ->
+    task.reports.xml.enabled = true
+    task.reports.xml.withMessages = true
+
+    // Set the task's excludeFilter based on its name
+    if (task.name == 'spotbugsTest') {
+      task.excludeFilter = rootProject.file('gradle/spotbugs/exclude-test.xml')
+    } else {
+      task.excludeFilter = rootProject.file('gradle/spotbugs/exclude-main.xml')
+    }
+  }
+
+  // Setup console report for 'main' spotbugs task
+  task spotbugsMainReport(type: SpotbugsReporter) {
+    type = 'main'
+  }
+  spotbugsMain.finalizedBy spotbugsMainReport
+
+  // Setup console report for 'test' spotbugs task
+  task spotbugsTestReport(type: SpotbugsReporter) {
+    type = 'test'
+  }
+  spotbugsTest.finalizedBy spotbugsTestReport
+
+  // PMD
+  apply plugin: 'pmd'
+  pmd {
+    incrementalAnalysis = true
+    ignoreFailures = true
+    toolVersion = pmdVersion
+  }
+  tasks.withType(Pmd) { task ->
+    reports.html.enabled true
+    reports.xml.enabled true
+    ruleSets = []
+    ruleSetFiles = rootProject.files('gradle/pmd/ruleset.xml')
+  }
+
+  // Setup console report for 'main' findbugs task
+  task pmdMainReport(type: PmdReporter) {
+    type = 'main'
+  }
+  pmdMain.finalizedBy pmdMainReport
+
+  // Setup console report for 'test' findbugs task
+  task pmdTestReport(type: PmdReporter) {
+    type = 'test'
+  }
+  pmdTest.finalizedBy pmdTestReport
+
+  // JaCoCo
+  apply plugin: "jacoco"
+  jacoco {
+    toolVersion = jacocoVersion
+  }
+  jacocoTestReport {
+    reports {
+      xml.enabled false
+      csv.enabled false
+      html.destination file("${buildDir}/jacocoHtml")
+    }
+  }
+  jacocoTestReport.dependsOn(project.test)
+  build.dependsOn(jacocoTestReport)
+
+  test {
+    reports {
+      junitXml.enabled = true
+    }
+  }
+
+  // Error Prone
+  apply plugin: 'net.ltgt.errorprone'
+  dependencies {
+    errorprone group: 'com.google.errorprone', name: 'error_prone_core', version: errorproneVersion
+    errorproneJavac group: 'com.google.errorprone', name: 'javac', version: errorproneJavacVersion
+  }
+}
+
+// CPD (only on the top-level project because this check doesn't make sense per sub-project)
+apply plugin: 'cpd'
+subprojects {
+  // all subprojects where 'check' task is available (which comes with 'JavaBasePlugin')
+  plugins.withType(JavaBasePlugin) {
+    check.dependsOn(rootProject.cpdCheck)
+  }
+  cpd {
+    ignoreFailures = true
+    minimumTokenCount = 100
+    toolVersion = pmdVersion
+  }
+}
+
+tasks.cpdCheck {
+  /* The CPD plugin assumes allJava is only Java files, but recent versions
+   * of Gradle state that this SourceSet includes "source which is indirectly
+   * compiled through joint compilation." The CPD tool will fail to parse
+   * the source of other files and fail. So, the following is a rewrite of
+   * the default source rule, which includes filtering for *.java files. */
+  source = files().asFileTree
+  allprojects.findAll({ p -> p.hasProperty('sourceSets') }).each({ p ->
+    p.sourceSets.all({ sourceSet ->
+      source sourceSet.allJava.matching({ it.include('**/*.java') })
+    })
+  })
+}
+
+// Make the top-level project run reports for all of the sub-projects.
+task jacocoTestReport {
+  description 'Generate JaCoCo code coverage reports.'
+
+  subprojects {
+    tasks.withType(JacocoReport) { task ->
+      rootProject.jacocoTestReport.dependsOn(task)
+    }
+  }
+}
+
+/* The JaCoCo Plugin for Jenkins throws an exception if it cannot find any "classes"
+ * directories within the entire build. So, we are putting a task on the rootProject
+ * to ensure that this directory is made so that the Jenkins plugin is happy.
+ */
+task jacocoJenkinsPluginWorkaround {
+  def classesDir = file("${buildDir}/classes");
+  outputs.dir classesDir
+  doLast {
+    classesDir.mkdirs();
+  }
+}
+build.dependsOn(jacocoJenkinsPluginWorkaround);

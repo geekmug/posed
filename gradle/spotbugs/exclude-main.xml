@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Copyright (C) 2019, Scott Dial, All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+<FindBugsFilter>
+  <!-- Providing empty methods is a valid method for designing for
+       extension. Non-final classes are allowed to have empty methods, so
+       there is no good justification to disallow this on abstracts. -->
+  <Match>
+    <Bug pattern="ACEM_ABSTRACT_CLASS_EMPTY_METHODS" />
+  </Match>
+
+  <!-- The circular dependency check is false-positive prone, and we have
+       other tools that will find these type of issues. This check is
+       normally disabled, but an interaction with fb-contrib causes these
+       to show up sporadically. -->
+  <Match>
+    <Or>
+      <Bug pattern="CD_CIRCULAR_DEPENDENCY" />
+      <Bug pattern="FCCD_FIND_CLASS_CIRCULAR_DEPENDENCY" />
+    </Or>
+  </Match>
+
+  <!-- The redundant null-check is false-positive prone, particularly for
+       non-null values because FindBugs assumes all parameters and return
+       values are non-null even though the Java language does not make this
+       guarantee (everything deriving from Object is nullable). -->
+  <Match>
+    <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+  </Match>
+
+  <!-- This check from fb-contrib tries to find things that are misnamed
+       (e.g., a variable named "fooSet" of type "List") and flag them as
+       confusing, but it also finds things like "preset" even though that's
+       not actually embedding a type in the name. So, this check is prone to
+       non-obvious false-positives. -->
+  <Match>
+    <Bug pattern="CNC_COLLECTION_NAMING_CONFUSION"/>
+  </Match>
+
+  <!-- This check from fb-contrib flags finds methods that "excessively"
+       use methods from another class, suggesting they be refactored. This
+       check is false-positive prone and is not a generally useful way to
+       decide when to refactor code. -->
+  <Match>
+    <Bug pattern="CE_CLASS_ENVY"/>
+  </Match>
+
+  <!-- System.exit(...) is allowed in in void main(String[]) methods. -->
+  <Match>
+    <Method returns="void" name="main" params="java.lang.String[]" />
+    <Bug pattern="DM_EXIT" />
+  </Match>
+</FindBugsFilter>
