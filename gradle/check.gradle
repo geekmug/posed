@@ -237,7 +237,7 @@ subprojects {
   }
   dependencies {
     spotbugsPlugins group: 'com.h3xstream.findsecbugs', name: 'findsecbugs-plugin', version: findsecbugsPluginVersion
-    spotbugsPlugins group: 'com.mebigfatguy.fb-contrib', name: 'fb-contrib', version: fbContribVersion
+    spotbugsPlugins group: 'com.mebigfatguy.sb-contrib', name: 'sb-contrib', version: sbContribVersion
   }
 
   // Configure spotbugs tasks to report XML withMessages

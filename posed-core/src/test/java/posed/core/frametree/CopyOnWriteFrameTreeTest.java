@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.core.frametree;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+import org.orekit.frames.Frame;
+
+public class CopyOnWriteFrameTreeTest extends AbstractFrameTreeTest {
+    @Override
+    protected CopyOnWriteFrameTree newFrameTree(Frame root) {
+        return new CopyOnWriteFrameTree(root);
+    }
+}

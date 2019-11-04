@@ -14,9 +14,19 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.core;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+import org.hipparchus.exception.DummyLocalizable;
+import org.orekit.errors.OrekitException;
+
+/** Exception thrown when Orekit needs a transform but none is available. */
+public final class UnknownTransformException extends OrekitException {
+    private static final long serialVersionUID = 1L;
+
+    public static final UnknownTransformException INSTANCE = new UnknownTransformException();
+
+    /** Creates a new instance of this exception. */
+    private UnknownTransformException() {
+        super(new DummyLocalizable("Unknown transform"));
+    }
+}

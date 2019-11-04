@@ -14,9 +14,21 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.core;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
+
+import org.junit.Test;
+import org.orekit.bodies.GeodeticPoint;
+
+public class GeodeticPoseTest {
+    @Test
+    public void testToString() {
+        GeodeticPose pose = new GeodeticPose(
+                new GeodeticPoint(0, 0, 0), NauticalAngles.IDENTITY);
+        assertThat(pose.toString(), is(not(nullValue())));
+    }
+}

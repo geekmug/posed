@@ -14,9 +14,16 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.web;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+
+import posed.core.PosedCoreConfiguration;
+
+/** Configuration needed for the posed.web package. */
+@Configuration
+@ComponentScan
+@Import(PosedCoreConfiguration.class)
+public class PosedWebConfiguration {}

@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package posed;
+
+option java_multiple_files = true;
+option java_package = "posed.proto";
+option java_outer_classname = "PosedProto";
+
+service PoseService {
+  rpc CreateRoot (CreateRootRequest) returns (CreateRootReply) {}
+  rpc Create (CreateRequest) returns (CreateReply) {}
+  rpc Delete (DeleteRequest) returns (DeleteReply) {}
+
+  rpc Update (UpdateRequest) returns (UpdateReply) {}
+
+  rpc Convert (ConvertRequest) returns (ConvertReply) {}
+  rpc ConvertStream (ConvertRequest) returns (stream ConvertReply) {}
+  rpc Transform (TransformRequest) returns (TransformReply) {}
+}
+
+message Position {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Orientation {
+  double roll = 1;
+  double pitch = 2;
+  double yaw = 3;
+}
+
+message Pose {
+  Position position = 1;
+  Orientation orientation = 2;
+}
+
+message GeoPosition {
+  double latitude = 1;
+  double longitude = 2;
+  double altitude = 3;
+}
+
+message GeoPose {
+  GeoPosition position = 1;
+  Orientation orientation = 2;
+}
+
+message CreateRootRequest {
+  string frame = 2;
+}
+
+message CreateRootReply {
+}
+
+message CreateRequest {
+  string parent = 1;
+  string frame = 2;
+  Pose offset = 3;
+}
+
+message CreateReply {
+}
+
+message DeleteRequest {
+  string frame = 2;
+}
+
+message DeleteReply {
+}
+
+message UpdateRequest {
+  string frame = 1;
+  GeoPose pose = 2;
+}
+
+message UpdateReply {
+  GeoPose pose = 1;
+}
+
+message TransformRequest {
+  string srcFrame = 1;
+  string dstFrame = 2;
+  Pose pose = 3;
+}
+
+message TransformReply {
+  string frame = 1;
+  Pose pose = 2;
+}
+
+message ConvertRequest {
+  string frame = 1;
+  oneof value {
+    GeoPose geopose = 2;
+    Pose pose = 5;
+  }
+}
+
+message ConvertReply {
+  string frame = 1;
+  oneof value {
+    GeoPose geopose = 2;
+    Pose pose = 5;
+  }
+}

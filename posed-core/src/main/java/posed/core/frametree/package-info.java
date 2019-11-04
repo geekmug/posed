@@ -14,9 +14,5 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
-
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+/** Various implementations of trees of {@code Frame}s. */
+package posed.core.frametree;

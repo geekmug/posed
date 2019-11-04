@@ -14,9 +14,5 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
-
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+/** HTTP interface to the PoseService. */
+package posed.web;

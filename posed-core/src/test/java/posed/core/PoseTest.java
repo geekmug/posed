@@ -14,9 +14,18 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.core;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.junit.Assert.assertThat;
+
+import org.junit.Test;
+
+public class PoseTest {
+    @Test
+    public void testToString() {
+        assertThat(Pose.IDENTITY.toString(), is(not(nullValue())));
+    }
+}

@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.core;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+public class NauticalAnglesTest {
+}

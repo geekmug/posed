@@ -14,9 +14,23 @@
  * limitations under the License.
  */
 
-rootProject.name = 'posed-parent'
+package posed.grpc;
 
-include 'posed-core'
-include 'posed-grpc'
-include 'posed-service'
-include 'posed-web'
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.closeTo;
+import static org.hipparchus.util.FastMath.PI;
+import static org.junit.Assert.assertThat;
+
+import org.junit.Test;
+
+import posed.core.NauticalAngles;
+import posed.grpc.proto.Orientation;
+
+public class PosedProtosTest {
+    @Test
+    public void testEncodeNauticalAnglesBoolean() {
+        Orientation encoded = PosedProtos.encode(
+                new NauticalAngles(0, 0, -PI / 2), true);
+        assertThat(encoded.getYaw(), is(closeTo(270, 0.1)));
+    }
+}
