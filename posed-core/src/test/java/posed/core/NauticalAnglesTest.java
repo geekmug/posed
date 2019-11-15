@@ -16,5 +16,65 @@
 
 package posed.core;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.closeTo;
+import static org.hipparchus.util.FastMath.PI;
+import static org.hipparchus.util.FastMath.toRadians;
+import static org.junit.Assert.assertThat;
+
+import org.hipparchus.geometry.euclidean.threed.Rotation;
+import org.junit.Test;
+
 public class NauticalAnglesTest {
+    private static final double ANGLE_ERROR = toRadians(0.0000001);
+
+    @Test
+    public void testNormalizeYaw() {
+        NauticalAngles a = new NauticalAngles(0, 0, 3 * PI / 2);
+        assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getPitch(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getYaw(), is(closeTo(-PI / 2, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testNormalizePitch() {
+        NauticalAngles a = new NauticalAngles(PI / 4, 3 * PI / 4, PI / 2);
+        assertThat(a.getRoll(), is(closeTo(-3 * PI / 4, ANGLE_ERROR)));
+        assertThat(a.getPitch(), is(closeTo(PI / 4, ANGLE_ERROR)));
+        assertThat(a.getYaw(), is(closeTo(-PI / 2, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testNormalizeWithRotation() {
+        double roll = PI / 4;
+        double pitch = 3 * PI / 4;
+        double yaw = PI / 2;
+
+        // Same test case as above with normalization turned off.
+        NauticalAngles a = new NauticalAngles(roll, pitch, yaw, false);
+        // Round-trip through Rotation to normalize it.
+        NauticalAngles b = new NauticalAngles(a.toRotation());
+        // Use our normalization to compare with Rotation output.
+        NauticalAngles c = new NauticalAngles(roll, pitch, yaw);
+
+        assertThat(b.getRoll(), is(closeTo(c.getRoll(), ANGLE_ERROR)));
+        assertThat(b.getPitch(), is(closeTo(c.getPitch(), ANGLE_ERROR)));
+        assertThat(b.getYaw(), is(closeTo(c.getYaw(), ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testGimbalLockUp() {
+        NauticalAngles a = new NauticalAngles(new Rotation(0.5, -0.5, 0.5, 0.5, true));
+        assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getPitch(), is(closeTo(PI / 2, ANGLE_ERROR)));
+        assertThat(a.getYaw(), is(closeTo(PI / 2, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testGimbalLockDown() {
+        NauticalAngles a = new NauticalAngles(new Rotation(0.5, -0.5, -0.5, -0.5, true));
+        assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getPitch(), is(closeTo(-PI / 2, ANGLE_ERROR)));
+        assertThat(a.getYaw(), is(closeTo(-PI / 2, ANGLE_ERROR)));
+    }
 }

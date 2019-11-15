@@ -211,6 +211,10 @@ public class PosedController {
 
         if (flat) {
             for (Frame frame : poseService.traverse()) {
+                if (frame == bodyFrame) {
+                    continue;
+                }
+
                 document.getAbstractFeatureGroup()
                         .addAll(createNode(baseUrl, scale, frame));
             }

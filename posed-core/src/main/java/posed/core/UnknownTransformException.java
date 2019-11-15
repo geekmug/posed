@@ -23,10 +23,12 @@ import org.orekit.errors.OrekitException;
 public final class UnknownTransformException extends OrekitException {
     private static final long serialVersionUID = 1L;
 
-    public static final UnknownTransformException INSTANCE = new UnknownTransformException();
+    /** Singleton instance of the unknown transform exception. */
+    public static final UnknownTransformException INSTANCE =
+            new UnknownTransformException("Unknown transform");
 
     /** Creates a new instance of this exception. */
-    private UnknownTransformException() {
-        super(new DummyLocalizable("Unknown transform"));
+    private UnknownTransformException(final String message) {
+        super(new DummyLocalizable(message));
     }
 }

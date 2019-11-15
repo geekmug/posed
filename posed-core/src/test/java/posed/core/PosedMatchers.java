@@ -21,20 +21,59 @@ import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
 import org.hipparchus.geometry.euclidean.threed.Rotation;
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
+import org.orekit.bodies.BodyShape;
 import org.orekit.bodies.GeodeticPoint;
 import org.orekit.models.earth.ReferenceEllipsoid;
 
 public class PosedMatchers {
+    private static class Vector3DMatcher extends TypeSafeMatcher<Vector3D> {
+        private final Vector3D expected;
+        private final double eps;
+
+        private Vector3DMatcher(final Vector3D expected, final double eps) {
+            this.expected = expected;
+            this.eps = eps;
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            description.appendValue(expected);
+        }
+
+        private double getError(Vector3D item) {
+            return Vector3D.distance(expected, item);
+        }
+
+        @Override
+        protected void describeMismatchSafely(Vector3D item,
+                Description mismatchDescription) {
+            mismatchDescription
+                    .appendText("distance=")
+                    .appendValue(getError(item))
+                    .appendText(", was ")
+                    .appendValue(item);
+        }
+
+        @Override
+        protected boolean matchesSafely(Vector3D item) {
+            return eps >= getError(item);
+        }
+    }
+
+    public static Matcher<Vector3D> closeTo(Vector3D expected, double error) {
+        return new Vector3DMatcher(expected, error);
+    }
+
     private static class GeodeticPointMatcher extends TypeSafeMatcher<GeodeticPoint> {
-        private final ReferenceEllipsoid referenceEllipsoid;
+        private final BodyShape bodyShape;
         private final GeodeticPoint expected;
         private final double eps;
 
         private GeodeticPointMatcher(
-                final ReferenceEllipsoid referenceEllipsoid,
+                final BodyShape bodyShape,
                 final GeodeticPoint expected,
                 final double eps) {
-            this.referenceEllipsoid = referenceEllipsoid;
+            this.bodyShape = bodyShape;
             this.expected = expected;
             this.eps = eps;
         }
@@ -61,7 +100,7 @@ public class PosedMatchers {
         }
 
         private Vector3D toEcef(GeodeticPoint position) {
-            return referenceEllipsoid.transform(position);
+            return bodyShape.transform(position);
         }
 
         @Override
@@ -70,7 +109,7 @@ public class PosedMatchers {
         }
     }
 
-    public static Matcher<GeodeticPoint> equalTo(
+    public static Matcher<GeodeticPoint> closeTo(
             ReferenceEllipsoid referenceEllipsoid, GeodeticPoint expected,
             double error) {
         return new GeodeticPointMatcher(referenceEllipsoid, expected, error);
@@ -111,7 +150,7 @@ public class PosedMatchers {
         }
     }
 
-    public static Matcher<NauticalAngles> equalTo(NauticalAngles expected,
+    public static Matcher<NauticalAngles> closeTo(NauticalAngles expected,
             double error) {
         return new NauticalAnglesMatcher(expected, error);
     }
@@ -121,13 +160,13 @@ public class PosedMatchers {
         private final GeodeticPointMatcher positionMatcher;
         private final NauticalAnglesMatcher anglesMatcher;
 
-        private GeodeticPoseMatcher(final ReferenceEllipsoid referenceEllipsoid,
+        private GeodeticPoseMatcher(final BodyShape bodyShape,
                 final GeodeticPose expected,
                 final double positionEps,
                 final double angleEps) {
             this.expected = expected;
             this.positionMatcher = new GeodeticPointMatcher(
-                    referenceEllipsoid, expected.getPosition(), positionEps);
+                    bodyShape, expected.getPosition(), positionEps);
             this.anglesMatcher = new NauticalAnglesMatcher(
                     expected.getOrientation(), angleEps);
         }
@@ -158,11 +197,54 @@ public class PosedMatchers {
         }
     }
 
-    public static Matcher<GeodeticPose> equalTo(
-            ReferenceEllipsoid referenceEllipsoid, GeodeticPose expected,
+    public static Matcher<GeodeticPose> closeTo(
+            BodyShape bodyShape, GeodeticPose expected,
             double positionError, double orientationError) {
-        return new GeodeticPoseMatcher(referenceEllipsoid, expected,
+        return new GeodeticPoseMatcher(bodyShape, expected,
                 positionError, orientationError);
+    }
+
+    private static class PoseMatcher extends TypeSafeMatcher<Pose> {
+        private final Pose expected;
+        private final Vector3DMatcher positionMatcher;
+        private final NauticalAnglesMatcher anglesMatcher;
+
+        private PoseMatcher(final Pose expected, final double positionEps,
+                final double angleEps) {
+            this.expected = expected;
+            this.positionMatcher = new Vector3DMatcher(
+                    expected.getPosition(), positionEps);
+            this.anglesMatcher = new NauticalAnglesMatcher(
+                    expected.getOrientation(), angleEps);
+        }
+
+        @Override
+        public void describeTo(Description description) {
+            description.appendValue(expected);
+        }
+
+        @Override
+        protected void describeMismatchSafely(Pose item,
+                Description mismatchDescription) {
+            mismatchDescription
+                    .appendText("distance={")
+                    .appendValue(positionMatcher.getError(item.getPosition()))
+                    .appendText(", ")
+                    .appendValue(anglesMatcher.getError(item.getOrientation()))
+                    .appendText("}, was ")
+                    .appendValue(item);
+        }
+
+        @Override
+        protected boolean matchesSafely(Pose item) {
+            return positionMatcher.matchesSafely(item.getPosition())
+                    && anglesMatcher.matchesSafely(item.getOrientation());
+        }
+    }
+
+    public static Matcher<Pose> closeTo(
+            Pose expected, double positionError, double orientationError) {
+        return new PoseMatcher(expected, positionError, orientationError);
     }
 
     private PosedMatchers() {}

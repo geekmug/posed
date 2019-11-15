@@ -153,7 +153,9 @@ public final class CopyOnWriteFrameTree implements FrameTree {
                 if (frame == update || childOfUpdate) {
                     TransformProvider xfrm = frame.getTransformProvider();
                     if (frame == update) {
-                        xfrm = updateXfrm;
+                        if (updateXfrm != null) {
+                            xfrm = updateXfrm;
+                        }
                         childOfUpdate = true;
                     }
                     newFrame = new Frame(parent, xfrm, frame.getName(),

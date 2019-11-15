@@ -48,6 +48,42 @@ public final class NauticalAngles {
     /**
      * Creates a set of angles from the given roll, pitch, and yaw.
      *
+     * <p>If needsNormalization is true, then the angles will be normalized so
+     * that pitch is between ±π/2 and the roll and yaw is between ±π.
+     *
+     * @param roll the angle around the x-axis. A positive angle corresponds to
+     *     a clockwise movement around that axis.
+     * @param pitch the angle around the y-axis. A positive angle corresponds to
+     *     a clockwise movement around that axis.
+     * @param yaw the angle around the z-axis. A positive angle corresponds to a
+     *     clockwise movement around that axis.
+     * @param needsNormalization if true, then the angles will be normalized
+     */
+    public NauticalAngles(final double roll, final double pitch,
+            final double yaw, final boolean needsNormalization) {
+        if (needsNormalization) {
+            double r = MathUtils.normalizeAngle(roll, 0);
+            double p = MathUtils.normalizeAngle(pitch, PI / 2);
+            double y = MathUtils.normalizeAngle(yaw, 0);
+            if (p > PI / 2.0) {
+                // pitch is beyond the pole -> add 180 to longitude and roll
+                r = MathUtils.normalizeAngle(r + PI, 0);
+                p = PI - p;
+                y = MathUtils.normalizeAngle(y + PI, 0);
+            }
+            this.roll = r;
+            this.pitch = p;
+            this.yaw = y;
+        } else {
+            this.roll = roll;
+            this.pitch = pitch;
+            this.yaw = yaw;
+        }
+    }
+
+    /**
+     * Creates a set of angles from the given roll, pitch, and yaw.
+     *
      * <p>The angles will be normalized so that pitch is between ±π/2 and the
      * roll and yaw is between ±π.
      *
@@ -58,19 +94,9 @@ public final class NauticalAngles {
      * @param yaw the angle around the z-axis. A positive angle corresponds to a
      *     clockwise movement around that axis.
      */
-    public NauticalAngles(final double roll, final double pitch, final double yaw) {
-        double r = MathUtils.normalizeAngle(roll, 0);
-        double p = MathUtils.normalizeAngle(pitch, PI / 2);
-        double y = MathUtils.normalizeAngle(yaw, 0);
-        if (p > PI / 2.0) {
-            // pitch is beyond the pole -> add 180 to longitude and roll
-            r = MathUtils.normalizeAngle(r + PI, 0);
-            p = PI - p;
-            y = MathUtils.normalizeAngle(y + PI, 0);
-        }
-        this.roll = r;
-        this.pitch = p;
-        this.yaw = y;
+    public NauticalAngles(
+            final double roll, final double pitch, final double yaw) {
+        this(roll, pitch, yaw, true);
     }
 
     /**
@@ -113,7 +139,8 @@ public final class NauticalAngles {
      * @return Hipparchus Rotation
      */
     public Rotation toRotation() {
-        return new Rotation(RotationOrder.ZYX, RotationConvention.FRAME_TRANSFORM,
+        return new Rotation(
+                RotationOrder.ZYX, RotationConvention.FRAME_TRANSFORM,
                 yaw, pitch, roll);
     }
 
