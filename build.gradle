@@ -75,6 +75,7 @@ allprojects {
       dependency group: 'com.github.spotbugs', name: 'spotbugs-annotations', version: spotbugsVersion
       dependency group: 'com.google.code.findbugs', name: 'jsr305', version: jsr305Version
       dependency group: 'com.google.guava', name: 'guava', version: guavaVersion
+      dependency group: 'com.google.protobuf', name: 'protoc', version: protocVersion
       dependency group: 'io.spring.javaformat', name: 'spring-javaformat-checkstyle', version: springJavaformatCheckstyleVersion
       dependency group: 'net.devh', name: 'grpc-server-spring-boot-autoconfigure', version: springBootGrpcVersion
       dependency group: 'net.devh', name: 'grpc-server-spring-boot-starter', version: springBootGrpcVersion
@@ -196,6 +197,9 @@ project(':posed-grpc') {
     generatedFilesBaseDir = "${buildDir}/grpc"
     clean {
       delete generatedFilesBaseDir
+    }
+    protoc {
+      artifact = 'com.google.protobuf:protoc'
     }
     plugins {
       grpc {
