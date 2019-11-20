@@ -142,6 +142,7 @@ project(':posed-grpc') {
   jar {
     from sourceSets.grpc.output
   }
+  javadoc.classpath += sourceSets.grpc.output
   sourcesJar.from {
     "${buildDir}/grpc/grpc/grpc"
     "${buildDir}/grpc/grpc/java"
@@ -210,6 +211,9 @@ project(':posed-grpc') {
       all()*.plugins {
         grpc {}
       }
+      all().each { task ->
+        sourcesJar.dependsOn task
+      }
     }
   }
 
@@ -227,11 +231,6 @@ project(':posed-grpc') {
     allowedToDeclare = [project.configurations.permitGrpcUnusedDeclared]
   }
   analyzeDependencies.dependsOn analyzeGrpcDependencies
-
-  // The generateGrpcProto task doesn't exist until after evaluation
-  afterEvaluate {
-    sourcesJar.dependsOn generateGrpcProto
-  }
 }
 
 project(':posed-service') {
