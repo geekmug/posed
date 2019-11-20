@@ -48,7 +48,7 @@ public final class GeodeticFrames {
                 new Transform(AbsoluteDate.PAST_INFINITY,
                         bodyShape.transform(point).negate()),
                 new Transform(AbsoluteDate.PAST_INFINITY,
-                        pose.getOrientation().toRotation().applyTo(topoRot)));
+                        topoRot.applyTo(pose.getOrientation().toRotation())));
     }
 
     /**
@@ -66,8 +66,8 @@ public final class GeodeticFrames {
         // Create a Frame based on the pose, so we can get it's transform.
         Frame poseFrame = new Frame(bodyShape.getBodyFrame(),
                 makeTransform(bodyShape, pose), "");
-        Transform xfrm = poseFrame.getTransformTo(
-                frame, AbsoluteDate.PAST_INFINITY);
+        Transform xfrm = frame.getTransformTo(
+                poseFrame, AbsoluteDate.PAST_INFINITY);
         return new Pose(
                 xfrm.getTranslation(), new NauticalAngles(xfrm.getRotation()));
     }

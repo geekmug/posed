@@ -71,6 +71,15 @@ public class NauticalAnglesTest {
     }
 
     @Test
+    public void testGimbalLockUpWithSmallYaw() {
+        NauticalAngles a = new NauticalAngles(
+                new NauticalAngles(0, PI / 2, toRadians(1)).toRotation());
+        assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getPitch(), is(closeTo(PI / 2, ANGLE_ERROR)));
+        assertThat(a.getYaw(), is(closeTo(toRadians(1), ANGLE_ERROR)));
+    }
+
+    @Test
     public void testGimbalLockDown() {
         NauticalAngles a = new NauticalAngles(new Rotation(0.5, -0.5, -0.5, -0.5, true));
         assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));

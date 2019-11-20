@@ -111,13 +111,13 @@ public final class NauticalAngles {
         // and we can choose to have theta in the interval [-PI/2 ; +PI/2]
         Vector3D v1 = r.applyTo(Vector3D.PLUS_K);
         Vector3D v2 = r.applyInverseTo(Vector3D.PLUS_I);
-        pitch = -asin(v2.getZ());
-
         /* If +i is exactly point down or up, then we can't get any yaw
          * information based on which way it's pointing, nor can we can any
          * information about the roll, because +k is coincident with +i,
-         * also known as "gimbal lock" (loss of one degree of freedom). */
-        if (v2.getZ() == -1 || v2.getZ() == 1) {
+         * also known as "gimbal lock" (loss of one degree of freedom).
+         * Additionally, this pushes pitch to asin(1), and any floating point
+         * errors that push us over 1, will get NaNs. */
+        if (v2.getZ() <= -1 || v2.getZ() >= 1) {
             /* We can recover the rotation around +k from the quarternion
              * to avoid losing the information. Because roll and yaw are
              * the same effective rotation in this situation, they are
@@ -126,10 +126,12 @@ public final class NauticalAngles {
              * Since a rotation around +k is yaw when not looking nadir or
              * zenith, we choose to maintain that relationship. */
             roll = 0;
+            pitch = -copySign(PI / 2, v2.getZ());
             yaw = -copySign(2, r.getQ0() * r.getQ2())
                     * atan2(r.getQ1(), r.getQ0());
         } else {
             roll = atan2(v1.getY(), v1.getZ());
+            pitch = -asin(v2.getZ());
             yaw = atan2(v2.getY(), v2.getX());
         }
     }
