@@ -17,6 +17,7 @@
 package posed.core;
 
 import static org.hipparchus.util.FastMath.PI;
+import static org.hipparchus.util.FastMath.abs;
 import static org.hipparchus.util.FastMath.asin;
 import static org.hipparchus.util.FastMath.atan2;
 import static org.hipparchus.util.FastMath.copySign;
@@ -37,6 +38,8 @@ import com.google.common.base.MoreObjects;
  * angles, which are applied as z-y'-x".
  */
 public final class NauticalAngles {
+    /** @see {@link Rotation#getAngles(RotationOrder, RotationConvention)} */
+    private static final double POLAR_THRESHOLD = 1 - 1e-10;
     /** A set of angles equivalent to no roll, pitch, or yaw. */
     public static final NauticalAngles IDENTITY =
             new NauticalAngles(Rotation.IDENTITY);
@@ -117,7 +120,7 @@ public final class NauticalAngles {
          * also known as "gimbal lock" (loss of one degree of freedom).
          * Additionally, this pushes pitch to asin(1), and any floating point
          * errors that push us over 1, will get NaNs. */
-        if (v2.getZ() <= -1 || v2.getZ() >= 1) {
+        if (abs(v2.getZ()) > POLAR_THRESHOLD) {
             /* We can recover the rotation around +k from the quarternion
              * to avoid losing the information. Because roll and yaw are
              * the same effective rotation in this situation, they are
