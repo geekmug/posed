@@ -17,10 +17,10 @@
 package posed.core;
 
 import static org.hipparchus.util.FastMath.PI;
-import static org.hipparchus.util.FastMath.abs;
-import static org.hipparchus.util.FastMath.asin;
+import static org.hipparchus.util.FastMath.atan;
 import static org.hipparchus.util.FastMath.atan2;
 import static org.hipparchus.util.FastMath.copySign;
+import static org.hipparchus.util.FastMath.sqrt;
 import static org.hipparchus.util.FastMath.toDegrees;
 
 import org.hipparchus.geometry.euclidean.threed.Rotation;
@@ -38,8 +38,6 @@ import com.google.common.base.MoreObjects;
  * angles, which are applied as z-y'-x".
  */
 public final class NauticalAngles {
-    /** @see {@link Rotation#getAngles(RotationOrder, RotationConvention)} */
-    private static final double POLAR_THRESHOLD = 1 - 1e-10;
     /** A set of angles equivalent to no roll, pitch, or yaw. */
     public static final NauticalAngles IDENTITY =
             new NauticalAngles(Rotation.IDENTITY);
@@ -107,35 +105,41 @@ public final class NauticalAngles {
      * @param r Hipparchus Rotation
      */
     public NauticalAngles(final Rotation r) {
-        // r (Vector3D.plusK) coordinates are :
-        //  -sin (theta), cos (theta) sin (phi), cos (theta) cos (phi)
-        // (-r) (Vector3D.plusI) coordinates are :
-        // cos (psi) cos (theta), sin (psi) cos (theta), -sin (theta)
-        // and we can choose to have theta in the interval [-PI/2 ; +PI/2]
-        Vector3D v1 = r.applyTo(Vector3D.PLUS_K);
-        Vector3D v2 = r.applyInverseTo(Vector3D.PLUS_I);
-        /* If +i is exactly point down or up, then we can't get any yaw
-         * information based on which way it's pointing, nor can we can any
-         * information about the roll, because +k is coincident with +i,
-         * also known as "gimbal lock" (loss of one degree of freedom).
-         * Additionally, this pushes pitch to asin(1), and any floating point
-         * errors that push us over 1, will get NaNs. */
-        if (abs(v2.getZ()) > POLAR_THRESHOLD) {
-            /* We can recover the rotation around +k from the quarternion
-             * to avoid losing the information. Because roll and yaw are
-             * the same effective rotation in this situation, they are
-             * additive, and there are an infinite number of ways to split
-             * the total rotation around +k between those two rotations.
-             * Since a rotation around +k is yaw when not looking nadir or
-             * zenith, we choose to maintain that relationship. */
-            roll = 0;
-            pitch = -copySign(PI / 2, v2.getZ());
-            yaw = -copySign(2, r.getQ0() * r.getQ2())
-                    * atan2(r.getQ1(), r.getQ0());
+        /* This calculation originated with:
+         *
+         *   https://marc-b-reynolds.github.io/math/2017/04/18/TaitEuler.html
+         *
+         * The formulation above attributes the ambiguous rotation to roll, but
+         * we have chosen to attribute it to yaw, since we most often have zero
+         * roll. Additionally, the given formulation strictly tests for t != 0,
+         * because that maps to a divide by zero condition, but when pitch is
+         * exactly polar, cancellation effects on t0 and t1 prevent t from being
+         * exactly zero and we amplify noise via atan2 calls for roll and yaw.
+         * Empirically, a threshold of t > 1e-31 was determined as the point
+         * where the atan2 results were more accurate than failing to the
+         * degenerate case. */
+        final double polarThreshold = 1e-31;
+
+        double w = r.getQ0();
+        double x = r.getQ1();
+        double y = r.getQ2();
+        double z = r.getQ3();
+
+        double t0 = x * x - z * z;
+        double t1 = w * w - y * y;
+        double xx = (t0 + t1) / 2; // 1/2 x of x'
+        double xy = x * y + w * z; // 1/2 y of x'
+        double xz = w * y - x * z; // 1/2 z of x'
+        double t = xx * xx + xy * xy; // cos(theta)^2
+        double yz = 2 * (y * z + w * x); // z of y'
+
+        pitch = atan(xz / sqrt(t));
+        if (t > polarThreshold) {
+            roll = atan2(yz, t1 - t0);
+            yaw = atan2(xy, xx);
         } else {
-            roll = atan2(v1.getY(), v1.getZ());
-            pitch = -asin(v2.getZ());
-            yaw = atan2(v2.getY(), v2.getX());
+            roll = 0;
+            yaw = -copySign(2, w * y) * atan2(x, w);
         }
     }
 

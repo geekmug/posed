@@ -26,7 +26,7 @@ import org.hipparchus.geometry.euclidean.threed.Rotation;
 import org.junit.Test;
 
 public class NauticalAnglesTest {
-    private static final double ANGLE_ERROR = toRadians(0.0000001);
+    private static final double ANGLE_ERROR = toRadians(0.000001);
 
     @Test
     public void testNormalizeYaw() {
@@ -80,12 +80,48 @@ public class NauticalAnglesTest {
     }
 
     @Test
-    public void testGimbalLockUpWithThreeYaw() {
-        NauticalAngles a = new NauticalAngles(
-                new NauticalAngles(0, PI / 2, toRadians(3)).toRotation());
-        assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
-        assertThat(a.getPitch(), is(closeTo(PI / 2, ANGLE_ERROR)));
-        assertThat(a.getYaw(), is(closeTo(toRadians(3), ANGLE_ERROR)));
+    public void testNearlyGimbalLockUpWithYaws() {
+        // Any closer to the pole and our error starts to increase
+        double pitch = toRadians(90 - 0.00001);
+        for (int i = 0; i < 18000; i += 25) {
+            double angle = i / 100.0;
+            NauticalAngles a = new NauticalAngles(
+                    new NauticalAngles(toRadians(angle), pitch, toRadians(angle))
+                    .toRotation());
+            assertThat(a.getRoll(), is(closeTo(toRadians(angle), ANGLE_ERROR)));
+            assertThat(a.getPitch(), is(closeTo(pitch, ANGLE_ERROR)));
+            assertThat(a.getYaw(), is(closeTo(toRadians(angle), ANGLE_ERROR)));
+        }
+    }
+
+    @Test
+    public void testGimbalLockUpWithYaws() {
+        for (int i = 0; i < 18000; i += 25) {
+            double angle = i / 100.0;
+            NauticalAngles a = new NauticalAngles(
+                    new NauticalAngles(0, PI / 2, toRadians(angle)).toRotation());
+            assertThat(a.getRoll(), is(closeTo(0, ANGLE_ERROR)));
+            assertThat(a.getPitch(), is(closeTo(PI / 2, ANGLE_ERROR)));
+            assertThat(a.getYaw(), is(closeTo(toRadians(angle), ANGLE_ERROR)));
+        }
+    }
+
+    @Test
+    public void testRotationRoundtrip() {
+        for (int r = -31; r < 31; r += 3) {
+            double roll = r / 10.0;
+            for (int p = -155; p < 155; p += 30) {
+                double pitch = p / 100.0;
+                for (int y = -31; y < 31; y += 3) {
+                    double yaw = y / 10.0;
+                    NauticalAngles a = new NauticalAngles(
+                            new NauticalAngles(roll, pitch, yaw).toRotation());
+                    assertThat(a.getRoll(), is(closeTo(roll, ANGLE_ERROR)));
+                    assertThat(a.getPitch(), is(closeTo(pitch, ANGLE_ERROR)));
+                    assertThat(a.getYaw(), is(closeTo(yaw, ANGLE_ERROR)));
+                }
+            }
+        }
     }
 
     @Test
