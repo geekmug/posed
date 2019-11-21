@@ -23,7 +23,6 @@ import org.hipparchus.geometry.euclidean.threed.Rotation;
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.orekit.bodies.BodyShape;
 import org.orekit.bodies.GeodeticPoint;
-import org.orekit.models.earth.ReferenceEllipsoid;
 
 public class PosedMatchers {
     private static class Vector3DMatcher extends TypeSafeMatcher<Vector3D> {
@@ -110,9 +109,9 @@ public class PosedMatchers {
     }
 
     public static Matcher<GeodeticPoint> closeTo(
-            ReferenceEllipsoid referenceEllipsoid, GeodeticPoint expected,
+            BodyShape bodyShape, GeodeticPoint expected,
             double error) {
-        return new GeodeticPointMatcher(referenceEllipsoid, expected, error);
+        return new GeodeticPointMatcher(bodyShape, expected, error);
     }
 
     private static class NauticalAnglesMatcher extends TypeSafeMatcher<NauticalAngles> {

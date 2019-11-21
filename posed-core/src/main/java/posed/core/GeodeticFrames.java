@@ -34,21 +34,25 @@ public final class GeodeticFrames {
      * @param pose geodetic pose
      * @return a transform from the pose to the body frame
      */
-    public static Transform makeTransform(BodyShape bodyShape, GeodeticPose pose) {
+    public static Transform makeTransform(
+            BodyShape bodyShape, GeodeticPose pose) {
+        GeodeticPoint point = pose.getPosition();
+
+        Vector3D xlat = bodyShape.transform(point).negate();
+
         /* The orientation of a GeodeticPose is defined in reference to the
          * topocentric frame at the position, so we need to recover the
          * rotation of the topocentric frame with respect to the GCRF body
          * frame, so that we can compose it with the given orientation. */
-        GeodeticPoint point = pose.getPosition();
         Rotation topoRot = new Rotation(
                 point.getNorth(), point.getEast(),
                 Vector3D.PLUS_I, Vector3D.PLUS_J);
+        Rotation rot = pose.getOrientation().toRotation().applyTo(topoRot);
+
         return new Transform(
                 AbsoluteDate.PAST_INFINITY,
-                new Transform(AbsoluteDate.PAST_INFINITY,
-                        bodyShape.transform(point).negate()),
-                new Transform(AbsoluteDate.PAST_INFINITY,
-                        topoRot.applyTo(pose.getOrientation().toRotation())));
+                new Transform(AbsoluteDate.PAST_INFINITY, xlat),
+                new Transform(AbsoluteDate.PAST_INFINITY, rot));
     }
 
     /**
@@ -69,7 +73,8 @@ public final class GeodeticFrames {
         Transform xfrm = frame.getTransformTo(
                 poseFrame, AbsoluteDate.PAST_INFINITY);
         return new Pose(
-                xfrm.getTranslation(), new NauticalAngles(xfrm.getRotation()));
+                xfrm.getTranslation().negate(),
+                new NauticalAngles(xfrm.getRotation()));
     }
 
     /**
