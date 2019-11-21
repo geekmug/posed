@@ -82,7 +82,7 @@ public class NauticalAnglesTest {
     @Test
     public void testNearlyGimbalLockUpWithYaws() {
         // Any closer to the pole and our error starts to increase
-        double pitch = toRadians(90 - 0.00001);
+        double pitch = toRadians(90 - 0.000001);
         for (int i = 0; i < 18000; i += 25) {
             double angle = i / 100.0;
             NauticalAngles a = new NauticalAngles(
