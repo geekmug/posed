@@ -39,8 +39,7 @@ import com.google.common.base.MoreObjects;
  */
 public final class NauticalAngles {
     /** A set of angles equivalent to no roll, pitch, or yaw. */
-    public static final NauticalAngles IDENTITY =
-            new NauticalAngles(Rotation.IDENTITY);
+    public static final NauticalAngles IDENTITY = new NauticalAngles(0, 0, 0);
 
     private final double roll;
     private final double pitch;

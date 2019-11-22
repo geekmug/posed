@@ -29,6 +29,17 @@ import org.orekit.time.AbsoluteDate;
 /** Helpers for working with geodetic {@link Frame}s. */
 public final class GeodeticFrames {
     /**
+     * Gets the North-East-Down (NED) topocentric rotation at a geodetic point.
+     * @param point origin of the topocentric frame
+     * @return topocentric rotation
+     */
+    public static Rotation getTopocentricRotation(GeodeticPoint point) {
+        return new Rotation(
+                point.getNorth(), point.getEast(),
+                Vector3D.PLUS_I, Vector3D.PLUS_J);
+    }
+
+    /**
      * Creates a transform from a given pose on a given body.
      * @param bodyShape geodetic body
      * @param pose geodetic pose
@@ -44,10 +55,8 @@ public final class GeodeticFrames {
          * topocentric frame at the position, so we need to recover the
          * rotation of the topocentric frame with respect to the GCRF body
          * frame, so that we can compose it with the given orientation. */
-        Rotation topoRot = new Rotation(
-                point.getNorth(), point.getEast(),
-                Vector3D.PLUS_I, Vector3D.PLUS_J);
-        Rotation rot = pose.getOrientation().toRotation().applyTo(topoRot);
+        Rotation rot = pose.getOrientation().toRotation().applyTo(
+                getTopocentricRotation(point));
 
         return new Transform(
                 AbsoluteDate.PAST_INFINITY,
@@ -100,10 +109,8 @@ public final class GeodeticFrames {
          * topocentric frame at the position, so we need to recover the
          * rotation of the topocentric frame with respect to the GCRF body
          * frame, so that we can compose it with the given orientation. */
-        Rotation topoRot = new Rotation(
-                point.getNorth(), point.getEast(),
-                Vector3D.PLUS_I, Vector3D.PLUS_J);
-        Rotation poseRot = topoRot.applyTo(xfrm.getRotation()).revert();
+        Rotation poseRot = getTopocentricRotation(point)
+                .applyTo(xfrm.getRotation()).revert();
 
         return new GeodeticPose(point, new NauticalAngles(poseRot));
     }
@@ -127,10 +134,8 @@ public final class GeodeticFrames {
          * topocentric frame at the position, so we need to recover the
          * rotation of the topocentric frame with respect to the GCRF body
          * frame, so that we can compose it with the given orientation. */
-        Rotation topoRot = new Rotation(
-                point.getNorth(), point.getEast(),
-                Vector3D.PLUS_I, Vector3D.PLUS_J);
-        Rotation poseRot = topoRot.applyTo(xfrm.getRotation()).revert();
+        Rotation poseRot = getTopocentricRotation(point)
+                .applyTo(xfrm.getRotation()).revert();
 
         return new GeodeticPose(point, new NauticalAngles(poseRot));
     }

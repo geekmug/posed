@@ -254,11 +254,15 @@ public class PoseGrpcService extends PoseServiceImplBase {
             checkArgument(!request.getSrcFrame().isEmpty(), "no source frame specified");
             checkArgument(!request.getDstFrame().isEmpty(), "no destination frame specified");
 
-            Pose pose = poseService.transform(
+            Optional<Pose> pose = poseService.transform(
                     request.getSrcFrame(), request.getDstFrame(),
                     PosedProtos.decode(request.getPose()));
-            responseObserver.onNext(TransformReply.newBuilder()
-                    .setPose(PosedProtos.encode(pose)).build());
+            if (pose.isPresent()) {
+                responseObserver.onNext(TransformReply.newBuilder()
+                        .setPose(PosedProtos.encode(pose.get())).build());
+            } else {
+                throw new IllegalArgumentException("undefined frame");
+            }
             responseObserver.onCompleted();
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));

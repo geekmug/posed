@@ -16,12 +16,13 @@
 
 package posed.core;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import org.hipparchus.geometry.euclidean.threed.Rotation;
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.orekit.bodies.BodyShape;
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.FixedTransformProvider;
@@ -33,6 +34,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
 
 import posed.core.frametree.CopyOnWriteFrameTree;
 import posed.core.frametree.FrameTree;
@@ -188,24 +190,33 @@ public class PoseService {
             // The first frame in the subgraph iterator is always the root.
             Frame root = treeCopy.subgraph(frame.getName()).iterator().next();
 
-            // Get the ECEF pose for the update.
-            Pose ecefPose = GeodeticFrames.convert(bodyShape, bodyFrame, pose);
+            // Get the topocentric rotation at this point.
+            Rotation topoRot =
+                    GeodeticFrames.getTopocentricRotation(pose.getPosition());
+
+            // Get the ECEF position for this point.
+            Vector3D ecefPosition = bodyShape.transform(pose.getPosition());
+
+            // Rotate the ECEF position into the frame
+            Vector3D framePosition = topoRot.applyInverseTo(ecefPosition);
+            Rotation frameRotation = topoRot.applyInverseTo(pose.getOrientation().toRotation());
 
             // Get the transform between the root and frame to adjust.
-            Transform xfrm = root.getTransformTo(frame, AbsoluteDate.PAST_INFINITY);
+            Transform xfrm = frame.getTransformTo(root, AbsoluteDate.PAST_INFINITY);
 
-            // Create a new ECEF pose for the root frame.
-            Pose rootEcefPose = new Pose(
-                    ecefPose.getPosition().subtract(xfrm.getTranslation()),
-                    new NauticalAngles(xfrm.getRotation().applyTo(
-                            ecefPose.getOrientation().toRotation())));
+            // Apply the transform to get the pose in the root frame.
+            Vector3D rootPosition = xfrm.getTranslation().add(framePosition);
+            Rotation rootRotation = xfrm.getRotation().applyTo(frameRotation);
 
-            // Convert back to a GeodeticPose.
-            GeodeticPose rootPose = GeodeticFrames.convert(bodyShape, bodyFrame, rootEcefPose);
+            // Rotate the position back into the ECEF frame
+            Vector3D rootEcefPosition = topoRot.applyTo(rootPosition);
+            Rotation rootEcefRotation = topoRot.applyTo(rootRotation);
 
-            // Update the root frame with the adjusted pose.
-            create(bodyFrame.getName(), root.getName(),
-                    GeodeticFrames.makeTransform(bodyShape, rootPose));
+            // Update the root frame with the adjusted transform.
+            Transform rootXfrm = new Transform(AbsoluteDate.PAST_INFINITY,
+                    new Transform(AbsoluteDate.PAST_INFINITY, rootEcefPosition.negate()),
+                    new Transform(AbsoluteDate.PAST_INFINITY, rootEcefRotation.revert()));
+            create(bodyFrame.getName(), root.getName(), rootXfrm);
         }
     }
 
@@ -216,7 +227,7 @@ public class PoseService {
      * @param pose pose in the source frame
      * @return pose in the destination frame
      */
-    public final Pose transform(String src, String dst, Pose pose) {
+    public final Optional<Pose> transform(String src, String dst, Pose pose) {
         checkNotNull(src);
         checkNotNull(dst);
         checkNotNull(pose);
@@ -224,11 +235,15 @@ public class PoseService {
         FrameTree treeCopy = new CopyOnWriteFrameTree(tree);
 
         Frame srcFrame = treeCopy.get(src);
-        checkArgument(srcFrame != null, "source frame is not defined");
+        if (srcFrame == null) {
+            return Optional.absent();
+        }
         Frame dstFrame = treeCopy.get(dst);
-        checkArgument(dstFrame != null, "destination frame is not defined");
+        if (dstFrame == null) {
+            return Optional.absent();
+        }
 
-        return Frames.transform(srcFrame, dstFrame, pose);
+        return Optional.of(Frames.transform(srcFrame, dstFrame, pose));
     }
 
     private Flux<Boolean> getOrMakeUpdateProcessor(String name) {
@@ -269,9 +284,11 @@ public class PoseService {
         checkNotNull(pose);
 
         // Return the current conversion, then any updates.
-        return getOrMakeUpdateProcessor(name).map(v -> {
-            return convert(name, pose);
-        });
+        return Flux.concat(ImmutableList.of(
+                Flux.just(convert(name, pose)),
+                getOrMakeUpdateProcessor(name).map(v -> {
+                    return convert(name, pose);
+                })));
     }
 
     /**
@@ -307,8 +324,10 @@ public class PoseService {
         checkNotNull(geopose);
 
         // Return the current conversion, then any updates.
-        return getOrMakeUpdateProcessor(name).map(v -> {
-            return convert(name, geopose);
-        });
+        return Flux.concat(ImmutableList.of(
+                Flux.just(convert(name, geopose)),
+                getOrMakeUpdateProcessor(name).map(v -> {
+                    return convert(name, geopose);
+                })));
     }
 }

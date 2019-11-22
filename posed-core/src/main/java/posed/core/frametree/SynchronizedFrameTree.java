@@ -72,7 +72,7 @@ public final class SynchronizedFrameTree implements FrameTree {
 
         Frame rootFrame = frames.get(root);
         if (rootFrame == null) {
-            return null;
+            return ImmutableList.of();
         }
         return ImmutableList.copyOf(
                 Traverser.forGraph(graph).depthFirstPreOrder(rootFrame));
@@ -87,7 +87,7 @@ public final class SynchronizedFrameTree implements FrameTree {
     public Iterable<Frame> subgraph(String target) {
         Frame targetFrame = frames.get(target);
         if (targetFrame == null) {
-            return null;
+            return ImmutableList.of();
         }
         // Walk up the graph to find the root of this subgraph for traversal.
         while (true) {

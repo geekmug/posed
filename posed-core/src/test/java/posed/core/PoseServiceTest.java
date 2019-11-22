@@ -16,26 +16,43 @@
 
 package posed.core;
 
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThan;
 import static org.hipparchus.util.FastMath.toRadians;
 import static org.junit.Assert.assertThat;
+import static posed.core.PosedMatchers.closeTo;
+
+import java.time.Duration;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.orekit.bodies.GeodeticPoint;
+import org.orekit.frames.Frame;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.annotation.DirtiesContext.ClassMode;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringRunner;
+import org.springframework.util.comparator.Comparators;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Streams;
+
+import reactor.test.StepVerifier;
 
 @RunWith(SpringRunner.class)
 @ContextConfiguration(classes = PosedCoreConfiguration.class)
+@DirtiesContext(classMode = ClassMode.AFTER_EACH_TEST_METHOD)
 public class PoseServiceTest {
     // Acceptable amount of error in geospatial calculations:
     private static final double ANGLE_ERROR = toRadians(0.0000001);
@@ -44,6 +61,8 @@ public class PoseServiceTest {
     private static final GeodeticPoint NULL_POSITION = new GeodeticPoint(0, 0, 0);
     private static final GeodeticPoint TEST_POSITION = new GeodeticPoint(
             toRadians(37.233333), toRadians(-115.808333), 1360);
+    private static final GeodeticPose TEST_POSE = new GeodeticPose(
+            TEST_POSITION, NauticalAngles.IDENTITY);
 
     @Autowired
     private PoseService poseService;
@@ -123,5 +142,163 @@ public class PoseServiceTest {
     public void testTPBelow() {
         poseService.update("root", new GeodeticPose(TEST_POSITION, NauticalAngles.IDENTITY));
         assertBelow(TEST_POSITION);
+    }
+
+    @Test
+    public void testConvertStreamPose() {
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("front", Pose.IDENTITY))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.update("root", new GeodeticPose(TEST_POSITION, NauticalAngles.IDENTITY)))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.update("root", new GeodeticPose(TEST_POSITION, NauticalAngles.IDENTITY)))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify();
+    }
+
+    @Test
+    public void testConvertStreamGeopose() {
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("front", TEST_POSE))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> {
+            poseService.update("root", TEST_POSE);
+        })
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.update("root", TEST_POSE))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify();
+    }
+
+    @Test
+    public void testConvertBadFramePose() {
+        assertThat(poseService.convert("unknown", Pose.IDENTITY),
+                is(equalTo(Optional.absent())));
+    }
+
+    @Test
+    public void testConvertBadFrameGeopose() {
+        assertThat(poseService.convert("unknown", TEST_POSE),
+                is(equalTo(Optional.absent())));
+    }
+
+    @Test
+    public void testGetBodyShape() {
+        assertThat(poseService.getBodyShape(), is(not(nullValue())));
+    }
+
+    @Test
+    public void testTraverse() {
+        List<String> names = Streams.stream(poseService.traverse())
+                .map(Frame::getName).collect(Collectors.toList());
+        // The ordering of the first two are stable
+        List<String> first = names.subList(0, 2);
+        assertThat(first, is(equalTo(ImmutableList.of("GCRF", "root"))));
+        // The ordering for the last three is unstable
+        List<String> last = names.subList(2, 5);
+        last.sort(Comparators.comparable());
+        assertThat(last, is(equalTo(ImmutableList.of("below", "front", "right"))));
+    }
+
+    @Test
+    public void testTraverseName() {
+        List<String> names = Streams.stream(poseService.traverse("root"))
+                .map(Frame::getName).collect(Collectors.toList());
+        // The ordering of the first one is stable
+        List<String> first = names.subList(0, 1);
+        assertThat(first, is(equalTo(ImmutableList.of("root"))));
+        // The ordering for the last three is unstable
+        List<String> last = names.subList(1, 4);
+        last.sort(Comparators.comparable());
+        assertThat(last, is(equalTo(ImmutableList.of("below", "front", "right"))));
+    }
+
+    @Test
+    public void testRemove() {
+        poseService.remove("below");
+        assertThat(ImmutableList.copyOf(poseService.traverse("below")).isEmpty(),
+                is(equalTo(true)));
+    }
+
+    @Test
+    public void testRemoveWithStream() {
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("below", TEST_POSE))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> {
+            poseService.remove("below");
+        })
+        .expectComplete()
+        .verify();
+    }
+
+    @Test
+    public void testTransform() {
+        assertThat(poseService.transform("front", "below", Pose.IDENTITY).get(),
+                is(closeTo(new Pose(new Vector3D(1, 0, -1), NauticalAngles.IDENTITY),
+                        POSITION_ERROR, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testTransformBadSrc() {
+        assertThat(poseService.transform("unknown", "below", Pose.IDENTITY).isPresent(),
+                is(equalTo(false)));
+    }
+
+    @Test
+    public void testTransformBadDst() {
+        assertThat(poseService.transform("below", "unknown", Pose.IDENTITY).isPresent(),
+                is(equalTo(false)));
+    }
+
+    @Test
+    public void testUpdateChildFront() {
+        poseService.update("front", new GeodeticPose(NULL_POSITION, NauticalAngles.IDENTITY));
+        GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
+        assertThat(pose.getPosition().getLatitude(), is(lessThan(0.0)));
+        assertThat(pose.getPosition().getLongitude(), is(closeTo(0, ANGLE_ERROR)));
+        assertThat(pose.getPosition().getAltitude(), is(closeTo(0, POSITION_ERROR)));
+    }
+
+    @Test
+    public void testUpdateChildRight() {
+        poseService.update("right", new GeodeticPose(NULL_POSITION, NauticalAngles.IDENTITY));
+        GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
+        assertThat(pose.getPosition().getLatitude(), is(closeTo(0, ANGLE_ERROR)));
+        assertThat(pose.getPosition().getLongitude(), is(greaterThan(0.0)));
+        assertThat(pose.getPosition().getAltitude(), is(closeTo(0, POSITION_ERROR)));
+    }
+
+    @Test
+    public void testUpdateChildBelow() {
+        poseService.update("below", new GeodeticPose(NULL_POSITION, NauticalAngles.IDENTITY));
+        GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
+        assertThat(pose.getPosition().getLatitude(), is(closeTo(0, ANGLE_ERROR)));
+        assertThat(pose.getPosition().getLongitude(), is(closeTo(0, ANGLE_ERROR)));
+        assertThat(pose.getPosition().getAltitude(), is(closeTo(1, POSITION_ERROR)));
     }
 }

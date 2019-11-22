@@ -32,6 +32,7 @@ import org.orekit.frames.Frame;
 import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.MutableGraph;
 import com.google.common.graph.Traverser;
@@ -333,7 +334,7 @@ public final class CopyOnWriteFrameTree implements FrameTree {
         State state = stateRef.get();
         Frame rootFrame = state.frames.get(root);
         if (rootFrame == null) {
-            return null;
+            return ImmutableList.of();
         }
         return Traverser.forGraph(state.graph).depthFirstPreOrder(rootFrame);
     }
@@ -350,7 +351,7 @@ public final class CopyOnWriteFrameTree implements FrameTree {
         State state = stateRef.get();
         Frame targetFrame = state.frames.get(target);
         if (targetFrame == null) {
-            return null;
+            return ImmutableList.of();
         }
         // Walk up the graph to find the root of this subgraph for traversal.
         while (true) {

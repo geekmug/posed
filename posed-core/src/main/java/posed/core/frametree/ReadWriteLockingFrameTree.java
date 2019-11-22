@@ -106,7 +106,7 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
         try {
             Frame rootFrame = frames.get(root);
             if (rootFrame == null) {
-                return null;
+                return ImmutableList.of();
             }
             return ImmutableList.copyOf(
                     Traverser.forGraph(graph).depthFirstPreOrder(rootFrame));
@@ -126,7 +126,7 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
         try {
             Frame targetFrame = frames.get(target);
             if (targetFrame == null) {
-                return null;
+                return ImmutableList.of();
             }
             // Walk up the graph to find the root of this subgraph for traversal.
             while (true) {

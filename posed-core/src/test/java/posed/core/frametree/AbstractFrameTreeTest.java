@@ -109,7 +109,8 @@ public abstract class AbstractFrameTreeTest {
         tree.createRoot("A");
         tree.create("A", "B", Pose.IDENTITY);
         tree.create("B", "C", Pose.IDENTITY);
-        assertThat(tree.traverse("D"), is(nullValue()));
+        assertThat(ImmutableList.copyOf(tree.traverse("D")).isEmpty(),
+                is(equalTo(true)));
     }
 
     @Test
@@ -217,6 +218,7 @@ public abstract class AbstractFrameTreeTest {
         tree.createRoot("A");
         tree.create("A", "B", Pose.IDENTITY);
         tree.create("B", "C", Pose.IDENTITY);
-        assertThat(tree.subgraph("D"), is(nullValue()));
+        assertThat(ImmutableList.copyOf(tree.subgraph("D")).isEmpty(),
+                is(equalTo(true)));
     }
 }
