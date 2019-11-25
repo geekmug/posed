@@ -188,7 +188,7 @@ public class PoseService {
                     GeodeticFrames.makeTransform(bodyShape, pose));
         } else {
             // The first frame in the subgraph iterator is always the root.
-            Frame root = treeCopy.subgraph(frame.getName()).iterator().next();
+            Frame root = treeCopy.findRoot(frame.getName());
 
             // Get the topocentric rotation at this point.
             Rotation topoRot =

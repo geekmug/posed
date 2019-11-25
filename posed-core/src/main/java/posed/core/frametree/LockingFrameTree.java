@@ -18,7 +18,7 @@ package posed.core.frametree;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
@@ -29,61 +29,46 @@ import posed.core.Frames;
 import posed.core.Pose;
 
 /**
- * A mutable tree of frames using a ReadWriteLock for coherence.
+ * A mutable tree of frames using a ReentrantLock for coherence.
  *
  * <p>Both the advantage and disadvantage to this implementation is that the
- * mutations occur in-place, requiring an exclusive write lock. Traversals are
- * implemented by copying the iterable to avoid a requirement to hold the read
+ * mutations occur in-place, requiring an exclusive lock. Traversals are
+ * implemented by copying the iterable to avoid a requirement to hold the
  * lock for the duration of the traversal.
  */
-public final class ReadWriteLockingFrameTree implements FrameTree {
+public final class LockingFrameTree implements FrameTree {
+    private final ReentrantLock lock = new ReentrantLock();
     private final Frame root;
     private final SynchronizedFrameTree frameTree;
-    private final ReentrantReadWriteLock.ReadLock readLock;
-    private final ReentrantReadWriteLock.WriteLock writeLock;
 
     /**
      * Creates a new frame tree with a given root frame.
      * @param root root frame
      */
-    public ReadWriteLockingFrameTree(final Frame root) {
+    public LockingFrameTree(final Frame root) {
         this.root = checkNotNull(root);
         frameTree = new SynchronizedFrameTree(root);
-
-        ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
-        readLock = lock.readLock();
-        writeLock = lock.writeLock();
     }
 
-    /** Acquires the read lock. */
-    public void readLock() {
-        readLock.lock();
+    /** Acquires the lock. */
+    public void lock() {
+        lock.lock();
     }
 
-    /** Releases the read lock. */
-    public void readUnlock() {
-        readLock.unlock();
-    }
-
-    /** Acquires the write lock. */
-    public void writeLock() {
-        writeLock.lock();
-    }
-
-    /** Releases the write lock. */
-    public void writeUnlock() {
-        writeLock.unlock();
+    /** Releases the lock. */
+    public void unlock() {
+        lock.unlock();
     }
 
     @Override
     public Frame get(String name) {
         checkNotNull(name);
 
-        readLock.lock();
+        lock.lock();
         try {
             return frameTree.get(name);
         } finally {
-            readLock.unlock();
+            lock.unlock();
         }
     }
 
@@ -91,11 +76,11 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
     public Iterable<Frame> traverse(String root) {
         checkNotNull(root);
 
-        readLock.lock();
+        lock.lock();
         try {
             return frameTree.traverse(root);
         } finally {
-            readLock.unlock();
+            lock.unlock();
         }
     }
 
@@ -106,21 +91,21 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
 
     @Override
     public Frame findRoot(String target) {
-        readLock.lock();
+        lock.lock();
         try {
             return frameTree.findRoot(target);
         } finally {
-            readLock.unlock();
+            lock.unlock();
         }
     }
 
     @Override
     public Iterable<Frame> subgraph(String target) {
-        readLock.lock();
+        lock.lock();
         try {
             return frameTree.subgraph(target);
         } finally {
-            readLock.unlock();
+            lock.unlock();
         }
     }
 
@@ -131,11 +116,11 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
 
     @Override
     public void create(String parentName, String name, TransformProvider xfrm) {
-        writeLock.lock();
+        lock.lock();
         try {
             frameTree.create(parentName, name, xfrm);
         } finally {
-            writeLock.unlock();
+            lock.unlock();
         }
     }
 
@@ -153,11 +138,11 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
 
     @Override
     public void remove(String name) {
-        writeLock.lock();
+        lock.lock();
         try {
             frameTree.remove(name);
         } finally {
-            writeLock.unlock();
+            lock.unlock();
         }
     }
 }

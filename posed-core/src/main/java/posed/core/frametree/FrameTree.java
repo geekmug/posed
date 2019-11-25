@@ -105,11 +105,22 @@ public interface FrameTree {
     Iterable<Frame> traverse();
 
     /**
+     * Finds the root of the subgraph containing the target.
+     *
+     * <p>The subgraph is defined as rooted with the first frame that is
+     * attached to the root frame of the frame tree.
+     *
+     * @param target a frame in the frame tree
+     * @return the root of the subgraph
+     */
+    Frame findRoot(String target);
+
+    /**
      * Gets a depth-first, pre-order traversal for a subgraph containing the
      * target.
      *
-     * <p>The subgraph is defined as root with the first frame that is attached
-     * to the root frame of the frame tree.
+     * <p>The subgraph is defined as rooted with the first frame that is
+     * attached to the root frame of the frame tree.
      *
      * @param target a frame in the frame tree
      * @return an iterable of frames for the subgraph

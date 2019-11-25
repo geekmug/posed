@@ -67,10 +67,10 @@ public final class SynchronizedFrameTree implements FrameTree {
     }
 
     @Override
-    public Iterable<Frame> traverse(String root) {
-        checkNotNull(root);
+    public Iterable<Frame> traverse(String name) {
+        checkNotNull(name);
 
-        Frame rootFrame = frames.get(root);
+        Frame rootFrame = frames.get(name);
         if (rootFrame == null) {
             return ImmutableList.of();
         }
@@ -83,30 +83,51 @@ public final class SynchronizedFrameTree implements FrameTree {
         return traverse(root.getName());
     }
 
-    @Override
-    public Iterable<Frame> subgraph(String target) {
+    private Frame findRoot0(String target) {
         Frame targetFrame = frames.get(target);
         if (targetFrame == null) {
-            return ImmutableList.of();
+            return null;
         }
         // Walk up the graph to find the root of this subgraph for traversal.
         while (true) {
             Frame parent = frames.get(targetFrame.getParent().getName());
             if (parent == root) {
-                return Traverser.forGraph(graph).depthFirstPreOrder(targetFrame);
+                return targetFrame;
             }
             targetFrame = parent;
         }
     }
 
     @Override
+    public Frame findRoot(String target) {
+        checkNotNull(target);
+        return findRoot0(target);
+    }
+
+    @Override
+    public Iterable<Frame> subgraph(String target) {
+        checkNotNull(target);
+
+        Frame targetFrame = findRoot0(target);
+        if (targetFrame == null) {
+            return ImmutableList.of();
+        } else {
+            return Traverser.forGraph(graph).depthFirstPreOrder(targetFrame);
+        }
+    }
+
+    @Override
     public void createRoot(String name) {
+        checkNotNull(name);
         create(root.getName(), name, (TransformProvider) null);
     }
 
     @Override
     public void create(String parentName, String name,
             TransformProvider xfrm) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+
         Frame parent = frames.get(parentName);
         checkArgument(parent != null, "parent frame is not defined");
 
@@ -153,17 +174,27 @@ public final class SynchronizedFrameTree implements FrameTree {
 
     @Override
     public void create(String parentName, String name, Transform xfrm) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+        checkNotNull(xfrm);
+
         create(parentName, name, new FixedTransformProvider(xfrm));
     }
 
     @Override
     public void create(String parentName, String name,
             Pose pose) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+        checkNotNull(pose);
+
         create(parentName, name, Frames.makeTransform(pose));
     }
 
     @Override
     public void remove(String name) {
+        checkNotNull(name);
+
         Frame frame = frames.get(name);
         if (frame == null) {
             return;

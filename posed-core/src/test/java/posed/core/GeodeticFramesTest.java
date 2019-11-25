@@ -22,6 +22,9 @@ import static org.hipparchus.util.FastMath.toRadians;
 import static org.junit.Assert.assertThat;
 import static posed.core.PosedMatchers.closeTo;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.hipparchus.util.Pair;
 import org.junit.Test;
@@ -73,16 +76,19 @@ public class GeodeticFramesTest {
                 is(closeTo(new NauticalAngles(0, -PI / 2, 0), ANGLE_ERROR)));
     }
 
+    private ImmutableList<Pair<GeodeticPoint, Vector3D>> getTestPoints(OneAxisEllipsoid ellipsoid) {
+        return ImmutableList.of(
+                Pair.create(new GeodeticPoint(0, 0, 0), new Vector3D(ellipsoid.getA(), 0, 0)),
+                Pair.create(new GeodeticPoint(0, PI / 2, 0), new Vector3D(0, ellipsoid.getB(), 0)),
+                Pair.create(new GeodeticPoint(PI / 2, 0, 0), new Vector3D(0, 0, ellipsoid.getC())));
+    }
 
     @Test
     public void testConvertEcefOnEarth() {
-        ImmutableList<Pair<GeodeticPoint, Vector3D>> points = ImmutableList.of(
-                Pair.create(new GeodeticPoint(0, 0, 0), new Vector3D(6378137, 0, 0)),
-                Pair.create(new GeodeticPoint(0, PI / 2, 0), new Vector3D(0, 6378137, 0)),
-                Pair.create(new GeodeticPoint(PI / 2, 0, 0), new Vector3D(0, 0, 6356752)),
-                Pair.create(
-                        new GeodeticPoint(toRadians(37.233333), toRadians(-115.808333), 1360),
-                        new Vector3D(-2214012, -4578204, 3838865)));
+        List<Pair<GeodeticPoint, Vector3D>> points = new ArrayList<>(getTestPoints(EARTH));
+        points.add(Pair.create(
+                new GeodeticPoint(toRadians(37.233333), toRadians(-115.808333), 1360),
+                new Vector3D(-2214012, -4578204, 3838865)));
         for (Pair<GeodeticPoint, Vector3D> point : points) {
             Pose pose = GeodeticFrames.convert(EARTH, GCRF,
                     new GeodeticPose(point.getFirst(), NauticalAngles.IDENTITY));
@@ -92,10 +98,7 @@ public class GeodeticFramesTest {
 
     @Test
     public void testConvertEcefOnSphere() {
-        ImmutableList<Pair<GeodeticPoint, Vector3D>> points = ImmutableList.of(
-                Pair.create(new GeodeticPoint(0, 0, 0), new Vector3D(1000, 0, 0)),
-                Pair.create(new GeodeticPoint(0, PI / 2, 0), new Vector3D(0, 1000, 0)),
-                Pair.create(new GeodeticPoint(PI / 2, 0, 0), new Vector3D(0, 0, 1000)));
+        ImmutableList<Pair<GeodeticPoint, Vector3D>> points = getTestPoints(SPHERE);
         for (Pair<GeodeticPoint, Vector3D> point : points) {
             Pose pose = GeodeticFrames.convert(SPHERE, GCRF,
                     new GeodeticPose(point.getFirst(), NauticalAngles.IDENTITY));

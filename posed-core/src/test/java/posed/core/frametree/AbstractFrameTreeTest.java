@@ -199,6 +199,26 @@ public abstract class AbstractFrameTreeTest {
     }
 
     @Test
+    public void testFindRoot() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.create("B", "C", Pose.IDENTITY);
+        tree.createRoot("D");
+        tree.create("D", "E", Pose.IDENTITY);
+        assertThat(tree.findRoot("B").getName(), is(equalTo("A")));
+    }
+
+    @Test
+    public void testFindRootNonexistant() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.create("B", "C", Pose.IDENTITY);
+        assertThat(tree.findRoot("D"), is(nullValue()));
+    }
+
+    @Test
     public void testSubgraph() {
         FrameTree tree = newFrameTree(FramesFactory.getGCRF());
         tree.createRoot("A");

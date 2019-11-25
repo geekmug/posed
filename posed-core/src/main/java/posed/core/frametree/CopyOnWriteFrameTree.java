@@ -344,23 +344,40 @@ public final class CopyOnWriteFrameTree implements FrameTree {
         return traverse(stateRef.get().root.getName());
     }
 
-    @Override
-    public Iterable<Frame> subgraph(String target) {
-        checkNotNull(target);
-
-        State state = stateRef.get();
+    private Frame findRoot0(State state, String target) {
         Frame targetFrame = state.frames.get(target);
         if (targetFrame == null) {
-            return ImmutableList.of();
+            return null;
         }
         // Walk up the graph to find the root of this subgraph for traversal.
         while (true) {
             Frame parent = state.frames.get(targetFrame.getParent().getName());
             if (parent == state.root) {
-                return Traverser.forGraph(state.graph)
-                        .depthFirstPreOrder(targetFrame);
+                return targetFrame;
             }
             targetFrame = parent;
+        }
+    }
+
+    @Override
+    public Frame findRoot(String target) {
+        checkNotNull(target);
+
+        State state = stateRef.get();
+        return findRoot0(state, target);
+    }
+
+    @Override
+    public Iterable<Frame> subgraph(String target) {
+        checkNotNull(target);
+
+        State state = stateRef.get();
+        Frame root = findRoot0(state, target);
+        if (root == null) {
+            return ImmutableList.of();
+        } else {
+            return Traverser.forGraph(state.graph)
+                    .depthFirstPreOrder(root);
         }
     }
 }

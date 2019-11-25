@@ -220,6 +220,9 @@ project(':posed-grpc') {
     }
   }
 
+  // Remove generated code from the cpdCheck
+  rootProject.cpdCheck.source -= sourceSets.grpc.allJava
+
   checkstyleGrpc.enabled = false
   licenseGrpc.enabled = false
   pmdGrpc.enabled = false
@@ -281,7 +284,7 @@ distributions {
   main {
     contents {
       // Add our proto file to our distribution output
-      from(project(':posed-grpc').sourceSets.getByName('grpc').proto.srcDirs) {
+      from(project(':posed-grpc').sourceSets.grpc.proto.srcDirs) {
         into 'proto'
       }
     }
