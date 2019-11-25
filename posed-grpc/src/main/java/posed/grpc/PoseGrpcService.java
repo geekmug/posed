@@ -20,11 +20,13 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import org.orekit.frames.Transform;
+import org.orekit.models.earth.Geoid;
 import org.orekit.time.AbsoluteDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
 
 import io.grpc.Status;
 import io.grpc.StatusException;
@@ -34,8 +36,10 @@ import posed.core.GeodeticPose;
 import posed.core.NauticalAngles;
 import posed.core.Pose;
 import posed.core.PoseService;
-import posed.grpc.proto.ConvertReply;
-import posed.grpc.proto.ConvertRequest;
+import posed.grpc.proto.ConvertGeodeticReply;
+import posed.grpc.proto.ConvertGeodeticRequest;
+import posed.grpc.proto.ConvertLocalReply;
+import posed.grpc.proto.ConvertLocalRequest;
 import posed.grpc.proto.CreateReply;
 import posed.grpc.proto.CreateRequest;
 import posed.grpc.proto.CreateRootReply;
@@ -44,12 +48,15 @@ import posed.grpc.proto.DeleteReply;
 import posed.grpc.proto.DeleteRequest;
 import posed.grpc.proto.Frame;
 import posed.grpc.proto.PoseServiceGrpc.PoseServiceImplBase;
+import posed.grpc.proto.SubgraphReply;
+import posed.grpc.proto.SubgraphRequest;
 import posed.grpc.proto.TransformReply;
 import posed.grpc.proto.TransformRequest;
 import posed.grpc.proto.TraverseReply;
 import posed.grpc.proto.TraverseRequest;
 import posed.grpc.proto.UpdateReply;
 import posed.grpc.proto.UpdateRequest;
+import reactor.core.scheduler.Schedulers;
 
 /** GRPC service instance for managing poses. */
 @Service
@@ -69,15 +76,18 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     private final PoseService poseService;
+    private final Geoid geoid;
     private final org.orekit.frames.Frame bodyFrame;
 
     /**
      * Creates a GRPC pose service using a given pose service.
      * @param poseService pose service
+     * @param geoid geoid to use when encoding and decoding AMSL
      */
     @Autowired
-    public PoseGrpcService(final PoseService poseService) {
+    public PoseGrpcService(final PoseService poseService, final Geoid geoid) {
         this.poseService = checkNotNull(poseService);
+        this.geoid = checkNotNull(geoid);
         bodyFrame = poseService.getReferenceEllipsoid().getBodyFrame();
     }
 
@@ -88,7 +98,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
 
             poseService.createRoot(request.getFrame());
-            responseObserver.onNext(CreateRootReply.newBuilder().build());
+            responseObserver.onNext(CreateRootReply.getDefaultInstance());
             responseObserver.onCompleted();
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
@@ -104,8 +114,8 @@ public class PoseGrpcService extends PoseServiceImplBase {
 
             poseService.create(
                     request.getParent(), request.getFrame(),
-                    PosedProtos.decode(request.getOffset()));
-            responseObserver.onNext(CreateReply.newBuilder().build());
+                    PosedProtos.decode(request.getPose()));
+            responseObserver.onNext(CreateReply.getDefaultInstance());
             responseObserver.onCompleted();
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
@@ -116,8 +126,56 @@ public class PoseGrpcService extends PoseServiceImplBase {
     public final void delete(DeleteRequest request,
             StreamObserver<DeleteReply> responseObserver) {
         try {
-            poseService.remove(request.getFrame());
-            responseObserver.onNext(DeleteReply.newBuilder().build());
+            if (request.getRecursive()) {
+                ImmutableList.copyOf(poseService.traverse(request.getFrame()))
+                .reverse()
+                .stream()
+                .map(org.orekit.frames.Frame::getName)
+                .forEach(name -> {
+                    try {
+                        poseService.remove(name);
+                    } catch (Throwable t) {
+                        // ignore
+                    }
+                });
+            } else {
+                poseService.remove(request.getFrame());
+            }
+            responseObserver.onNext(DeleteReply.getDefaultInstance());
+            responseObserver.onCompleted();
+        } catch (Throwable t) {
+            responseObserver.onError(toGrpc(t));
+        }
+    }
+
+    private Frame makeFrame(org.orekit.frames.Frame frame) {
+        Frame.Builder frameBuilder = Frame.newBuilder()
+                .setFrame(frame.getName());
+        org.orekit.frames.Frame parent = frame.getParent();
+        if (parent != bodyFrame) {
+            frameBuilder.setParent(parent.getName());
+            Transform xfrm = parent.getTransformTo(frame, AbsoluteDate.PAST_INFINITY);
+            frameBuilder.setPose(PosedProtos.encode(new Pose(
+                    xfrm.getCartesian().getPosition(),
+                    new NauticalAngles(xfrm.getRotation()))));
+        }
+        return frameBuilder.build();
+    }
+
+    @Override
+    public final void subgraph(SubgraphRequest request,
+            StreamObserver<SubgraphReply> responseObserver) {
+        try {
+            checkArgument(!request.getFrame().isEmpty(), "no frame specified");
+
+            SubgraphReply.Builder builder = SubgraphReply.newBuilder();
+            for (org.orekit.frames.Frame frame : poseService.subgraph(request.getFrame())) {
+                if (frame == bodyFrame) {
+                    continue;
+                }
+                builder.addFrames(makeFrame(frame));
+            }
+            responseObserver.onNext(builder.build());
             responseObserver.onCompleted();
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
@@ -128,23 +186,18 @@ public class PoseGrpcService extends PoseServiceImplBase {
     public final void traverse(TraverseRequest request,
             StreamObserver<TraverseReply> responseObserver) {
         try {
+            final Iterable<org.orekit.frames.Frame> traverse;
+            if (request.getFrame().isEmpty()) {
+                traverse = poseService.traverse();
+            } else {
+                traverse = poseService.traverse(request.getFrame());
+            }
             TraverseReply.Builder builder = TraverseReply.newBuilder();
-            for (org.orekit.frames.Frame frame : poseService.traverse()) {
+            for (org.orekit.frames.Frame frame : traverse) {
                 if (frame == bodyFrame) {
                     continue;
                 }
-
-                Frame.Builder frameBuilder = Frame.newBuilder()
-                        .setFrame(frame.getName());
-                org.orekit.frames.Frame parent = frame.getParent();
-                if (parent != bodyFrame) {
-                    frameBuilder.setParent(parent.getName());
-                    Transform xfrm = parent.getTransformTo(frame, AbsoluteDate.PAST_INFINITY);
-                    frameBuilder.setOffset(PosedProtos.encode(new Pose(
-                            xfrm.getCartesian().getPosition(),
-                            new NauticalAngles(xfrm.getRotation()))));
-                }
-                builder.addFrames(frameBuilder);
+                builder.addFrames(makeFrame(frame));
             }
             responseObserver.onNext(builder.build());
             responseObserver.onCompleted();
@@ -158,12 +211,8 @@ public class PoseGrpcService extends PoseServiceImplBase {
             StreamObserver<UpdateReply> responseObserver) {
         try {
             poseService.update(request.getFrame(),
-                    PosedProtos.decode(request.getPose()));
-            Optional<GeodeticPose> pose =
-                    poseService.convert(request.getFrame(), Pose.IDENTITY);
-            responseObserver.onNext(UpdateReply.newBuilder()
-                    .setPose(PosedProtos.encode(pose.get()))
-                    .build());
+                    PosedProtos.decode(geoid, request.getPose()));
+            responseObserver.onNext(UpdateReply.getDefaultInstance());
             responseObserver.onCompleted();
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
@@ -171,29 +220,16 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     @Override
-    public final void convert(ConvertRequest request,
-            StreamObserver<ConvertReply> responseObserver) {
+    public final void convertGeodeticToLocal(ConvertGeodeticRequest request,
+            StreamObserver<ConvertLocalReply> responseObserver) {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
 
-            ConvertReply.Builder builder = ConvertReply.newBuilder();
-            switch (request.getValueCase()) {
-            case POSE:
-                Optional<GeodeticPose> geopose = poseService.convert(
-                        request.getFrame(), PosedProtos.decode(request.getPose()));
-                if (geopose.isPresent()) {
-                    builder.setGeopose(PosedProtos.encode(geopose.get()));
-                }
-                break;
-            case GEOPOSE:
-                Optional<Pose> pose = poseService.convert(
-                        request.getFrame(), PosedProtos.decode(request.getGeopose()));
-                if (pose.isPresent()) {
-                    builder.setPose(PosedProtos.encode(pose.get()));
-                }
-                break;
-            default:
-                throw new RuntimeException("no pose specified");
+            Optional<Pose> pose = poseService.convert(
+                    request.getFrame(), PosedProtos.decode(geoid, request.getPose()));
+            ConvertLocalReply.Builder builder = ConvertLocalReply.newBuilder();
+            if (pose.isPresent()) {
+                builder.setPose(PosedProtos.encode(pose.get()));
             }
             responseObserver.onNext(builder.build());
             responseObserver.onCompleted();
@@ -203,45 +239,69 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     @Override
-    public final void convertStream(ConvertRequest request,
-        StreamObserver<ConvertReply> responseObserver) {
+    public final void convertGeodeticToLocalStream(ConvertGeodeticRequest request,
+            StreamObserver<ConvertLocalReply> responseObserver) {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
 
-            switch (request.getValueCase()) {
-            case POSE:
-                poseService.convertStream(
-                        request.getFrame(), PosedProtos.decode(request.getPose()))
-                .subscribe(geopose -> {
-                    ConvertReply.Builder builder = ConvertReply.newBuilder();
-                    if (geopose.isPresent()) {
-                        builder.setGeopose(PosedProtos.encode(geopose.get()));
-                    }
-                    responseObserver.onNext(builder.build());
-                }, error -> {
-                    responseObserver.onError(Status.INTERNAL.withCause(error).asException());
-                }, () -> {
-                    responseObserver.onCompleted();
-                });
-                break;
-            case GEOPOSE:
-                poseService.convertStream(
-                        request.getFrame(), PosedProtos.decode(request.getGeopose()))
-                .subscribe(pose -> {
-                    ConvertReply.Builder builder = ConvertReply.newBuilder();
-                    if (pose.isPresent()) {
-                        builder.setPose(PosedProtos.encode(pose.get()));
-                    }
-                    responseObserver.onNext(builder.build());
-                }, error -> {
-                    responseObserver.onError(Status.INTERNAL.withCause(error).asException());
-                }, () -> {
-                    responseObserver.onCompleted();
-                });
-                break;
-            default:
-                throw new RuntimeException("no pose specified");
+            poseService.convertStream(
+                    request.getFrame(), PosedProtos.decode(geoid, request.getPose()))
+            .subscribeOn(Schedulers.elastic())
+            .subscribe(pose -> {
+                ConvertLocalReply.Builder builder = ConvertLocalReply.newBuilder();
+                if (pose.isPresent()) {
+                    builder.setPose(PosedProtos.encode(pose.get()));
+                }
+                responseObserver.onNext(builder.build());
+            }, error -> {
+                responseObserver.onError(Status.INTERNAL.withCause(error).asException());
+            }, () -> {
+                responseObserver.onCompleted();
+            });
+        } catch (Throwable t) {
+            responseObserver.onError(toGrpc(t));
+        }
+    }
+
+    @Override
+    public final void convertLocalToGeodetic(ConvertLocalRequest request,
+            StreamObserver<ConvertGeodeticReply> responseObserver) {
+        try {
+            checkArgument(!request.getFrame().isEmpty(), "no frame specified");
+
+            ConvertGeodeticReply.Builder builder = ConvertGeodeticReply.newBuilder();
+            Optional<GeodeticPose> geopose = poseService.convert(
+                    request.getFrame(), PosedProtos.decode(request.getPose()));
+            if (geopose.isPresent()) {
+                builder.setPose(PosedProtos.encode(geoid, geopose.get()));
             }
+            responseObserver.onNext(builder.build());
+            responseObserver.onCompleted();
+        } catch (Throwable t) {
+            responseObserver.onError(toGrpc(t));
+        }
+    }
+
+    @Override
+    public final void convertLocalToGeodeticStream(ConvertLocalRequest request,
+            StreamObserver<ConvertGeodeticReply> responseObserver) {
+        try {
+            checkArgument(!request.getFrame().isEmpty(), "no frame specified");
+
+            poseService.convertStream(
+                    request.getFrame(), PosedProtos.decode(request.getPose()))
+            .subscribeOn(Schedulers.elastic())
+            .subscribe(pose -> {
+                ConvertGeodeticReply.Builder builder = ConvertGeodeticReply.newBuilder();
+                if (pose.isPresent()) {
+                    builder.setPose(PosedProtos.encode(geoid, pose.get()));
+                }
+                responseObserver.onNext(builder.build());
+            }, error -> {
+                responseObserver.onError(Status.INTERNAL.withCause(error).asException());
+            }, () -> {
+                responseObserver.onCompleted();
+            });
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
         }
@@ -264,6 +324,33 @@ public class PoseGrpcService extends PoseServiceImplBase {
                 throw new IllegalArgumentException("undefined frame");
             }
             responseObserver.onCompleted();
+        } catch (Throwable t) {
+            responseObserver.onError(toGrpc(t));
+        }
+    }
+
+    @Override
+    public final void transformStream(TransformRequest request,
+            StreamObserver<TransformReply> responseObserver) {
+        try {
+            checkArgument(!request.getSrcFrame().isEmpty(), "no source frame specified");
+            checkArgument(!request.getDstFrame().isEmpty(), "no destination frame specified");
+
+            poseService.transformStream(
+                    request.getSrcFrame(), request.getDstFrame(),
+                    PosedProtos.decode(request.getPose()))
+            .subscribeOn(Schedulers.elastic())
+            .subscribe(pose -> {
+                TransformReply.Builder builder = TransformReply.newBuilder();
+                if (pose.isPresent()) {
+                    builder.setPose(PosedProtos.encode(pose.get()));
+                }
+                responseObserver.onNext(builder.build());
+            }, error -> {
+                responseObserver.onError(Status.INTERNAL.withCause(error).asException());
+            }, () -> {
+                responseObserver.onCompleted();
+            });
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
         }

@@ -22,15 +22,47 @@ import static org.hipparchus.util.FastMath.PI;
 import static org.junit.Assert.assertThat;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.orekit.bodies.GeodeticPoint;
+import org.orekit.models.earth.Geoid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit4.SpringRunner;
 
 import posed.core.NauticalAngles;
-import posed.grpc.proto.Orientation;
+import posed.core.PosedCoreConfiguration;
+import posed.grpc.proto.GeodeticPositionRequest;
 
+@RunWith(SpringRunner.class)
+@ContextConfiguration(classes = PosedCoreConfiguration.class)
 public class PosedProtosTest {
+    @Autowired
+    private Geoid geoid;
+
     @Test
     public void testEncodeNauticalAnglesBoolean() {
-        Orientation encoded = PosedProtos.encode(
+        posed.grpc.proto.NauticalAngles encoded = PosedProtos.encode(
                 new NauticalAngles(0, 0, -PI / 2), true);
         assertThat(encoded.getYaw(), is(closeTo(270, 0.1)));
+    }
+
+    @Test
+    public void testAmslToHae() {
+        /* According to EGM96, MSL at (0,0) is about 17m above the
+         * ellipsoid, so this test checks that 0m AMSL about 17m HAE
+         * to ensure that we didn't flip the sign on the offset. */
+        assertThat(PosedProtos.decode(geoid,
+                GeodeticPositionRequest.newBuilder()
+                .setLatitude(0).setLongitude(0).setAmsl(0).build()).getAltitude(),
+                is(closeTo(17.0, 1)));
+    }
+
+    @Test
+    public void testHaeToAmsl() {
+        /* According to EGM96, MSL at (0,0) is about 17m above the
+         * ellipsoid, so this test checks that 0m AMSL about 17m HAE
+         * to ensure that we didn't flip the sign on the offset. */
+        assertThat(PosedProtos.encode(geoid, new GeodeticPoint(0, 0, 0)).getAmsl(),
+                is(closeTo(-17.0, 1)));
     }
 }

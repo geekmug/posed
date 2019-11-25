@@ -48,6 +48,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 
+import reactor.core.publisher.UnicastProcessor;
 import reactor.test.StepVerifier;
 
 @RunWith(SpringRunner.class)
@@ -223,10 +224,7 @@ public class PoseServiceTest {
                 ImmutableList.of("below", "front", "right"))));
     }
 
-    @Test
-    public void testTraverseName() {
-        List<String> names = Streams.stream(poseService.traverse("root"))
-                .map(Frame::getName).collect(Collectors.toList());
+    private void assertTraversal(List<String> names) {
         // The ordering of the first one is stable
         List<String> first = names.subList(0, 1);
         assertThat(first, is(equalTo(ImmutableList.of("root"))));
@@ -235,6 +233,20 @@ public class PoseServiceTest {
         last.sort(Comparators.comparable());
         assertThat(last, is(equalTo(
                 ImmutableList.of("below", "front", "right"))));
+    }
+
+    @Test
+    public void testSubgraphName() {
+        List<String> names = Streams.stream(poseService.subgraph("front"))
+                .map(Frame::getName).collect(Collectors.toList());
+        assertTraversal(names);
+    }
+
+    @Test
+    public void testTraverseName() {
+        List<String> names = Streams.stream(poseService.traverse("root"))
+                .map(Frame::getName).collect(Collectors.toList());
+        assertTraversal(names);
     }
 
     @Test
@@ -278,6 +290,23 @@ public class PoseServiceTest {
     public void testTransformBadDst() {
         assertThat(poseService.transform("below", "unknown", Pose.IDENTITY).isPresent(),
                 is(equalTo(false)));
+    }
+
+    @Test
+    public void testTransformStream() {
+        StepVerifier.withVirtualTime(
+                () -> poseService.transformStream("front", "below", Pose.IDENTITY))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.update("root", new GeodeticPose(TEST_POSITION, NauticalAngles.IDENTITY)))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify();
     }
 
     @Test
@@ -354,5 +383,49 @@ public class PoseServiceTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testMergeWithEarlyExitCompleted() {
+        UnicastProcessor<Boolean> first = UnicastProcessor.create();
+        UnicastProcessor<Boolean> second = UnicastProcessor.create();
+        StepVerifier.withVirtualTime(
+                () -> PoseService.mergeWithEarlyExit(first, second))
+        .expectSubscription()
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> {
+            first.onNext(Boolean.TRUE);
+        })
+        .assertNext(v -> {
+            assertThat(v, is(equalTo(Boolean.TRUE)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> {
+            second.onComplete();
+        })
+        .expectComplete()
+        .verify();
+    }
+
+    @Test
+    public void testMergeWithEarlyExitError() {
+        UnicastProcessor<Boolean> first = UnicastProcessor.create();
+        UnicastProcessor<Boolean> second = UnicastProcessor.create();
+        StepVerifier.withVirtualTime(
+                () -> PoseService.mergeWithEarlyExit(first, second))
+        .expectSubscription()
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> {
+            second.onNext(Boolean.TRUE);
+        })
+        .assertNext(v -> {
+            assertThat(v, is(equalTo(Boolean.TRUE)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> {
+            first.onError(new RuntimeException("test"));
+        })
+        .expectError()
+        .verify();
     }
 }

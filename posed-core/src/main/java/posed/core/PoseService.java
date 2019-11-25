@@ -28,11 +28,12 @@ import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.time.AbsoluteDate;
+import org.reactivestreams.Publisher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 
 import posed.core.frametree.CopyOnWriteFrameTree;
 import posed.core.frametree.FrameTree;
@@ -42,6 +43,39 @@ import reactor.core.publisher.ReplayProcessor;
 /** Service instance for managing poses. */
 @Service
 public class PoseService {
+    /**
+     * Merge data from {@link Publisher} sequences contained in an array / vararg
+     * into an interleaved merged sequence. Unlike {@link #concat(Publisher) concat},
+     * sources are subscribed to eagerly.
+     * <p>
+     * <img class="marble" src="doc-files/marbles/mergeFixedSources.svg" alt="">
+     * <p>
+     * Note that merge is tailored to work with asynchronous sources or finite sources. When dealing with
+     * an infinite source that doesn't already publish on a dedicated Scheduler, you must isolate that source
+     * in its own Scheduler, as merge would otherwise attempt to drain it before subscribing to
+     * another source.
+     *
+     * @param sources the array of {@link Publisher} sources to merge
+     * @param <I> The source type of the data sequence
+     *
+     * @return a merged {@link Flux}
+     */
+    @SafeVarargs
+    @SuppressWarnings("varargs")
+    @VisibleForTesting
+    static <I> Flux<I> mergeWithEarlyExit(Flux<? extends I>... sources) {
+        return Flux.merge(Flux.just(sources).map(Flux::materialize))
+        .handle((signal, sink) -> {
+            if (signal.isOnComplete()) {
+                sink.complete();
+            } else if (signal.isOnError()) {
+                sink.error(signal.getThrowable());
+            } else {
+                sink.next(signal.get());
+            }
+        });
+    }
+
     private final ConcurrentHashMap<String, ReplayProcessor<Boolean>> updateProcessors =
             new ConcurrentHashMap<>();
     private final ReferenceEllipsoid referenceEllipsoid;
@@ -65,6 +99,20 @@ public class PoseService {
      */
     public final ReferenceEllipsoid getReferenceEllipsoid() {
         return referenceEllipsoid;
+    }
+
+    /**
+     * Gets a depth-first, pre-order traversal for a subgraph containing the
+     * target.
+     *
+     * <p>The subgraph is defined as rooted with the first frame that is
+     * attached to the root frame of the frame tree.
+     *
+     * @param name a frame in the frame tree
+     * @return an iterable of frames for the subgraph
+     */
+    public final Iterable<Frame> subgraph(String name) {
+        return tree.subgraph(name);
     }
 
     /**
@@ -231,6 +279,27 @@ public class PoseService {
     }
 
     /**
+     * Gets a stream of the apparent pose in a destination frame for a source frame and pose.
+     * @param src source frame
+     * @param dst destination frame
+     * @param pose pose in the source frame
+     * @return a stream of apparent pose in the destination frame
+     */
+    public Flux<Optional<Pose>> transformStream(String src,
+            String dst, Pose pose) {
+        checkNotNull(src);
+        checkNotNull(dst);
+        checkNotNull(pose);
+
+        // Return the current transform, then any updates.
+        return Flux.just(transform(src, dst, pose)).concatWith(
+                mergeWithEarlyExit(
+                        getOrMakeUpdateProcessor(src),
+                        getOrMakeUpdateProcessor(dst))
+                .map(v -> transform(src, dst, pose)));
+    }
+
+    /**
      * Gets a geodetic pose for a pose in a given frame.
      * @param name frame in which the pose is expressed
      * @param pose pose in the given frame
@@ -263,11 +332,10 @@ public class PoseService {
         checkNotNull(pose);
 
         // Return the current conversion, then any updates.
-        return Flux.concat(ImmutableList.of(
-                Flux.just(convert(name, pose)),
+        return Flux.just(convert(name, pose)).concatWith(
                 getOrMakeUpdateProcessor(name).map(v -> {
                     return convert(name, pose);
-                })));
+                }));
     }
 
     /**
@@ -303,10 +371,9 @@ public class PoseService {
         checkNotNull(geopose);
 
         // Return the current conversion, then any updates.
-        return Flux.concat(ImmutableList.of(
-                Flux.just(convert(name, geopose)),
+        return Flux.just(convert(name, geopose)).concatWith(
                 getOrMakeUpdateProcessor(name).map(v -> {
                     return convert(name, geopose);
-                })));
+                }));
     }
 }

@@ -26,13 +26,18 @@ service PoseService {
   rpc CreateRoot (CreateRootRequest) returns (CreateRootReply) {}
   rpc Create (CreateRequest) returns (CreateReply) {}
   rpc Delete (DeleteRequest) returns (DeleteReply) {}
+  rpc Subgraph (SubgraphRequest) returns (SubgraphReply) {}
   rpc Traverse (TraverseRequest) returns (TraverseReply) {}
 
   rpc Update (UpdateRequest) returns (UpdateReply) {}
 
-  rpc Convert (ConvertRequest) returns (ConvertReply) {}
-  rpc ConvertStream (ConvertRequest) returns (stream ConvertReply) {}
+  rpc ConvertGeodeticToLocal (ConvertGeodeticRequest) returns (ConvertLocalReply) {}
+  rpc ConvertGeodeticToLocalStream (ConvertGeodeticRequest) returns (stream ConvertLocalReply) {}
+  rpc ConvertLocalToGeodetic (ConvertLocalRequest) returns (ConvertGeodeticReply) {}
+  rpc ConvertLocalToGeodeticStream (ConvertLocalRequest) returns (stream ConvertGeodeticReply) {}
+
   rpc Transform (TransformRequest) returns (TransformReply) {}
+  rpc TransformStream (TransformRequest) returns (stream TransformReply) {}
 }
 
 message Position {
@@ -41,96 +46,141 @@ message Position {
   double z = 3;
 }
 
-message Orientation {
+message GeodeticPositionRequest {
+  double latitude = 1;
+  double longitude = 2;
+  oneof altitude {
+    double amsl = 3;
+    double hae = 4;
+  }
+}
+
+message GeodeticPositionReply {
+  double latitude = 1;
+  double longitude = 2;
+  double amsl = 3;
+  double hae = 4;
+}
+
+message NauticalAngles {
   double roll = 1;
   double pitch = 2;
   double yaw = 3;
 }
 
-message Pose {
+message Quaternion {
+  double w = 1;
+  double x = 2;
+  double y = 3;
+  double z = 4;
+}
+
+message PoseRequest {
   Position position = 1;
-  Orientation orientation = 2;
-}
-
-message GeoPosition {
-  double latitude = 1;
-  double longitude = 2;
-  double altitude = 3;
-}
-
-message GeoPose {
-  GeoPosition position = 1;
-  Orientation orientation = 2;
-}
-
-message CreateRootRequest {
-  string frame = 2;
-}
-
-message CreateRootReply {
-}
-
-message CreateRequest {
-  string parent = 1;
-  string frame = 2;
-  Pose offset = 3;
-}
-
-message CreateReply {
-}
-
-message DeleteRequest {
-  string frame = 2;
-}
-
-message DeleteReply {
-}
-
-message UpdateRequest {
-  string frame = 1;
-  GeoPose pose = 2;
-}
-
-message UpdateReply {
-  GeoPose pose = 1;
-}
-
-message TransformRequest {
-  string srcFrame = 1;
-  string dstFrame = 2;
-  Pose pose = 3;
-}
-
-message TransformReply {
-  string frame = 1;
-  Pose pose = 2;
-}
-
-message ConvertRequest {
-  string frame = 1;
-  oneof value {
-    GeoPose geopose = 2;
-    Pose pose = 5;
+  oneof rotation {
+    NauticalAngles angles = 2;
+    Quaternion quaternion = 3;
   }
 }
 
-message ConvertReply {
-  string frame = 1;
-  oneof value {
-    GeoPose geopose = 2;
-    Pose pose = 5;
+message PoseReply {
+  Position position = 1;
+  NauticalAngles angles = 2;
+  Quaternion quaternion = 3;
+}
+
+message GeodeticPoseRequest {
+  GeodeticPositionRequest position = 1;
+  oneof rotation {
+    NauticalAngles angles = 2;
+    Quaternion quaternion = 3;
   }
 }
 
-message TraverseRequest {
+message GeodeticPoseReply {
+  GeodeticPositionReply position = 1;
+  NauticalAngles angles = 2;
+  Quaternion quaternion = 3;
 }
 
 message Frame {
   string parent = 1;
   string frame = 2;
-  Pose offset = 3;
+  PoseReply pose = 3;
+}
+
+message CreateRootRequest {
+  string frame = 1;
+}
+
+message CreateRootReply {}
+
+message CreateRequest {
+  string parent = 1;
+  string frame = 2;
+  PoseRequest pose = 3;
+}
+
+message CreateReply {}
+
+message DeleteRequest {
+  string frame = 1;
+  bool recursive = 2;
+}
+
+message DeleteReply {}
+
+message SubgraphRequest {
+  string frame = 1;
+}
+
+message SubgraphReply {
+  repeated Frame frames = 1;
+}
+
+message TraverseRequest {
+  string frame = 1;
 }
 
 message TraverseReply {
   repeated Frame frames = 1;
+}
+
+message UpdateRequest {
+  string frame = 1;
+  GeodeticPoseRequest pose = 2;
+}
+
+message UpdateReply {}
+
+message ConvertGeodeticRequest {
+  string frame = 1;
+  GeodeticPoseRequest pose = 2;
+}
+
+message ConvertGeodeticReply {
+  oneof value {
+    GeodeticPoseReply pose = 1;
+  }
+}
+
+message ConvertLocalRequest {
+  string frame = 1;
+  PoseRequest pose = 2;
+}
+
+message ConvertLocalReply {
+  oneof value {
+    PoseReply pose = 1;
+  }
+}
+
+message TransformRequest {
+  string srcFrame = 1;
+  string dstFrame = 2;
+  PoseRequest pose = 3;
+}
+
+message TransformReply {
+  PoseReply pose = 3;
 }
