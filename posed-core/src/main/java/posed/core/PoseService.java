@@ -21,10 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import org.hipparchus.geometry.euclidean.threed.Rotation;
-import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.orekit.bodies.BodyShape;
-import org.orekit.bodies.GeodeticPoint;
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
@@ -191,42 +188,14 @@ public class PoseService {
             // The first frame in the subgraph iterator is always the root.
             Frame root = treeCopy.findRoot(frame.getName());
 
-            // Get the transform from the root to use to adjust the update.
-            Transform xfrm = root.getTransformTo(frame, AbsoluteDate.PAST_INFINITY);
+            /* Build a new transform from bodyFrame to root WITHOUT using the
+             * existing provider from bodyFrame to root that will be updated. */
+            Transform xfrm = new Transform(AbsoluteDate.PAST_INFINITY,
+                    GeodeticFrames.makeTransform(bodyShape, pose),
+                    frame.getTransformTo(root, AbsoluteDate.PAST_INFINITY));
 
-            // Get the topocentric rotation at this point.
-            Rotation topoRot =
-                    GeodeticFrames.getTopocentricRotation(pose.getPosition());
-
-            // Get the ECEF position for this point.
-            Vector3D ecefPosition = bodyShape.transform(pose.getPosition());
-
-            // Rotate the ECEF position into the frame of the transform.
-            Vector3D framePosition = topoRot.applyInverseTo(ecefPosition);
-
-            // Apply the transform to get the pose in the root frame.
-            Vector3D rootPosition = framePosition.subtract(xfrm.getTranslation());
-            Rotation rootRotation = xfrm.getRotation().applyInverseTo(pose.getOrientation().toRotation());
-
-            // Rotate the position back into the ECEF frame.
-            Vector3D rootEcefPosition = topoRot.applyTo(rootPosition);
-
-            // Calculate the position translation for the root transform.
-            Vector3D xlat = rootEcefPosition.negate();
-
-            // Get the topocentric rotation at the root point.
-            GeodeticPoint rootPoint = bodyShape.transform(
-                    rootEcefPosition, bodyFrame, AbsoluteDate.PAST_INFINITY);
-            Rotation rootTopoRot = GeodeticFrames.getTopocentricRotation(rootPoint);
-
-            // Calculate the rotation for the root transform.
-            Rotation rot = rootRotation.applyTo(rootTopoRot);
-
-            // Update the root frame with the adjusted transform.
-            create(bodyFrame.getName(), root.getName(), new Transform(
-                    AbsoluteDate.PAST_INFINITY,
-                    new Transform(AbsoluteDate.PAST_INFINITY, xlat),
-                    new Transform(AbsoluteDate.PAST_INFINITY, rot)));
+            // Update the root frame with the derived transform.
+            create(bodyFrame.getName(), root.getName(), xfrm);
         }
     }
 

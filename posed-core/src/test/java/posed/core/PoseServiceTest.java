@@ -61,6 +61,8 @@ public class PoseServiceTest {
     private static final GeodeticPoint NULL_POSITION = new GeodeticPoint(0, 0, 0);
     private static final GeodeticPoint TEST_POSITION = new GeodeticPoint(
             toRadians(37.233333), toRadians(-115.808333), 1360);
+    private static final GeodeticPose NULL_POSE = new GeodeticPose(
+            NULL_POSITION, NauticalAngles.IDENTITY);
     private static final GeodeticPose TEST_POSE = new GeodeticPose(
             TEST_POSITION, NauticalAngles.IDENTITY);
 
@@ -71,19 +73,11 @@ public class PoseServiceTest {
     public void setUp() {
         poseService.createRoot("root");
         poseService.create("root", "front",
-                new Pose(new Vector3D(1, 0, 0),
-                        new NauticalAngles(0, 0, toRadians(30))));
-        poseService.create("root", "right",
-                new Pose(new Vector3D(0, 1, 0),
-                        new NauticalAngles(0, toRadians(30), 0)));
-        poseService.create("root", "below",
-                new Pose(new Vector3D(0, 0, 1),
-                        new NauticalAngles(toRadians(30), 0, 0)));
-        poseService.create("root", "A",
                 new Pose(new Vector3D(1, 0, 0), NauticalAngles.IDENTITY));
-        poseService.create("root", "B",
+        poseService.create("root", "right",
+                new Pose(new Vector3D(0, 1, 0), NauticalAngles.IDENTITY));
+        poseService.create("root", "below",
                 new Pose(new Vector3D(0, 0, 1), NauticalAngles.IDENTITY));
-
     }
 
     private void assertFront(GeodeticPoint position) {
@@ -226,7 +220,7 @@ public class PoseServiceTest {
         List<String> last = names.subList(2, names.size());
         last.sort(Comparators.comparable());
         assertThat(last, is(equalTo(
-                ImmutableList.of("A", "B", "below", "front", "right"))));
+                ImmutableList.of("below", "front", "right"))));
     }
 
     @Test
@@ -239,8 +233,8 @@ public class PoseServiceTest {
         // The ordering for the last three is unstable
         List<String> last = names.subList(1, names.size());
         last.sort(Comparators.comparable());
-        assertThat(last, is(equalTo(ImmutableList.of(
-                "A", "B", "below", "front", "right"))));
+        assertThat(last, is(equalTo(
+                ImmutableList.of("below", "front", "right"))));
     }
 
     @Test
@@ -268,7 +262,7 @@ public class PoseServiceTest {
 
     @Test
     public void testTransform() {
-        assertThat(poseService.transform("A", "B", Pose.IDENTITY).get(),
+        assertThat(poseService.transform("front", "below", Pose.IDENTITY).get(),
                 is(closeTo(new Pose(
                         new Vector3D(1, 0, -1), NauticalAngles.IDENTITY),
                         POSITION_ERROR, ANGLE_ERROR)));
@@ -288,37 +282,77 @@ public class PoseServiceTest {
 
     @Test
     public void testUpdateChildFront() {
-        poseService.update("front", new GeodeticPose(NULL_POSITION, NauticalAngles.IDENTITY));
+        poseService.update("front", NULL_POSE);
         GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
         assertThat(pose.getPosition().getLatitude(), is(lessThan(0.0)));
         assertThat(pose.getPosition().getLongitude(), is(closeTo(0, ANGLE_ERROR)));
         assertThat(pose.getPosition().getAltitude(), is(greaterThan(0.0)));
-        assertThat(pose.getOrientation(),
-                is(closeTo(new NauticalAngles(0, 0, toRadians(-30)),
-                        ANGLE_ERROR)));
     }
 
     @Test
     public void testUpdateChildRight() {
-        poseService.update("right", new GeodeticPose(NULL_POSITION, NauticalAngles.IDENTITY));
+        poseService.update("right", NULL_POSE);
         GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
         assertThat(pose.getPosition().getLatitude(), is(closeTo(0, ANGLE_ERROR)));
-        assertThat(pose.getPosition().getLongitude(), is(greaterThan(0.0)));
+        assertThat(pose.getPosition().getLongitude(), is(lessThan(0.0)));
         assertThat(pose.getPosition().getAltitude(), is(closeTo(0, POSITION_ERROR)));
-        assertThat(pose.getOrientation(),
-                is(closeTo(new NauticalAngles(0, toRadians(-30), 0),
-                        ANGLE_ERROR)));
     }
 
     @Test
     public void testUpdateChildBelow() {
-        poseService.update("below", new GeodeticPose(NULL_POSITION, NauticalAngles.IDENTITY));
+        poseService.update("below", NULL_POSE);
         GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
         assertThat(pose.getPosition().getLatitude(), is(closeTo(0, ANGLE_ERROR)));
         assertThat(pose.getPosition().getLongitude(), is(closeTo(0, ANGLE_ERROR)));
         assertThat(pose.getPosition().getAltitude(), is(closeTo(1, POSITION_ERROR)));
-        assertThat(pose.getOrientation(),
-                is(closeTo(new NauticalAngles(toRadians(-30), 0, 0),
-                        ANGLE_ERROR)));
+    }
+
+    private void assertUpdateChildRotated(NauticalAngles expected, NauticalAngles rotation) {
+        poseService.create("root", "rotated",
+                new Pose(new Vector3D(0, 0, 0), rotation));
+        poseService.update("rotated", NULL_POSE);
+        GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
+        assertThat(pose, is(closeTo(poseService.getBodyShape(),
+                new GeodeticPose(new GeodeticPoint(0, 0, 0), expected),
+                POSITION_ERROR, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testUpdateChildRotatedRoll() {
+        assertUpdateChildRotated(
+                new NauticalAngles(-toRadians(30), 0, 0),
+                new NauticalAngles(toRadians(30), 0, 0));
+    }
+
+    @Test
+    public void testUpdateChildRotatedPitch() {
+        assertUpdateChildRotated(
+                new NauticalAngles(0, -toRadians(30), 0),
+                new NauticalAngles(0, toRadians(30), 0));
+    }
+
+    @Test
+    public void testUpdateChildRotatedYaw() {
+        assertUpdateChildRotated(
+                new NauticalAngles(0, 0, -toRadians(30)),
+                new NauticalAngles(0, 0, toRadians(30)));
+    }
+
+    @Test
+    public void testUpdateChildRotated() {
+        // In general, the root rotation should be the reverted rotation.
+        for (int r = -31; r < 31; r += 3) {
+            double roll = r / 10.0;
+            for (int p = -155; p < 155; p += 30) {
+                double pitch = p / 100.0;
+                for (int y = -31; y < 31; y += 3) {
+                    double yaw = y / 10.0;
+                    NauticalAngles a = new NauticalAngles(roll, pitch, yaw);
+                    assertUpdateChildRotated(
+                            new NauticalAngles(a.toRotation().revert()),
+                            a);
+                }
+            }
+        }
     }
 }
