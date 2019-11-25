@@ -16,7 +16,13 @@
 
 package posed.core;
 
+import org.orekit.data.ClasspathCrawler;
+import org.orekit.data.DataProvidersManager;
+import org.orekit.forces.gravity.potential.EGMFormatReader;
+import org.orekit.forces.gravity.potential.GravityFieldFactory;
+import org.orekit.forces.gravity.potential.NormalizedSphericalHarmonicsProvider;
 import org.orekit.frames.FramesFactory;
+import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -26,12 +32,41 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 @ComponentScan
 public class PosedCoreConfiguration {
+    private static final ReferenceEllipsoid WGS84 =
+            ReferenceEllipsoid.getWgs84(FramesFactory.getGCRF());
+    private static final Geoid GEOID;
+
+    static {
+        final int maxDegree = 360;
+        final int maxOrder = 360;
+        // Load the EGM96 coefficients from our class path
+        DataProvidersManager.getInstance().addProvider(
+                new ClasspathCrawler(
+                        PosedCoreConfiguration.class.getPackage().getName()
+                        .replace('.', '/') + "/egm96"));
+        GravityFieldFactory.clearPotentialCoefficientsReaders();
+        GravityFieldFactory.addPotentialCoefficientsReader(
+                new EGMFormatReader(".*egm96", false));
+        NormalizedSphericalHarmonicsProvider geopotential =
+                GravityFieldFactory.getConstantNormalizedProvider(maxDegree, maxOrder);
+        GEOID = new Geoid(geopotential, WGS84);
+    }
+
     /**
      * Gets the reference ellipsoid for the posed engine.
      * @return reference ellipsoid for the posed engine
      */
     @Bean
     public ReferenceEllipsoid getReferenceEllipsoid() {
-        return ReferenceEllipsoid.getWgs84(FramesFactory.getGCRF());
+        return WGS84;
+    }
+
+    /**
+     * Gets the geoid for the posed engine.
+     * @return geoid for the posed engine
+     */
+    @Bean
+    public Geoid geoid() {
+        return GEOID;
     }
 }
