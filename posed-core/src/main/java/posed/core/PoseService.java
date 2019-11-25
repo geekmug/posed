@@ -21,12 +21,12 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
-import org.orekit.bodies.BodyShape;
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
 import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
+import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.time.AbsoluteDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -44,27 +44,27 @@ import reactor.core.publisher.ReplayProcessor;
 public class PoseService {
     private final ConcurrentHashMap<String, ReplayProcessor<Boolean>> updateProcessors =
             new ConcurrentHashMap<>();
-    private final BodyShape bodyShape;
+    private final ReferenceEllipsoid referenceEllipsoid;
     private final Frame bodyFrame;
     private final CopyOnWriteFrameTree tree;
 
     /**
      * Creates a pose service with a given geodetic body.
-     * @param bodyShape geodetic body
+     * @param referenceEllipsoid reference ellipsoid
      */
     @Autowired
-    public PoseService(final BodyShape bodyShape) {
-        this.bodyShape = checkNotNull(bodyShape);
-        bodyFrame = bodyShape.getBodyFrame();
+    public PoseService(final ReferenceEllipsoid referenceEllipsoid) {
+        this.referenceEllipsoid = checkNotNull(referenceEllipsoid);
+        bodyFrame = referenceEllipsoid.getBodyFrame();
         tree = new CopyOnWriteFrameTree(bodyFrame);
     }
 
     /**
-     * Gets the geodetic body for this pose service.
-     * @return geodetic body
+     * Gets the reference ellipsoid for this pose service.
+     * @return reference ellipsoid
      */
-    public final BodyShape getBodyShape() {
-        return bodyShape;
+    public final ReferenceEllipsoid getReferenceEllipsoid() {
+        return referenceEllipsoid;
     }
 
     /**
@@ -183,7 +183,7 @@ public class PoseService {
         Frame frame = treeCopy.get(name);
         if (frame.getParent() == bodyFrame) {
             create(bodyFrame.getName(), name,
-                    GeodeticFrames.makeTransform(bodyShape, pose));
+                    GeodeticFrames.makeTransform(referenceEllipsoid, pose));
         } else {
             // The first frame in the subgraph iterator is always the root.
             Frame root = treeCopy.findRoot(frame.getName());
@@ -191,7 +191,7 @@ public class PoseService {
             /* Build a new transform from bodyFrame to root WITHOUT using the
              * existing provider from bodyFrame to root that will be updated. */
             Transform xfrm = new Transform(AbsoluteDate.PAST_INFINITY,
-                    GeodeticFrames.makeTransform(bodyShape, pose),
+                    GeodeticFrames.makeTransform(referenceEllipsoid, pose),
                     frame.getTransformTo(root, AbsoluteDate.PAST_INFINITY));
 
             // Update the root frame with the derived transform.
@@ -246,7 +246,7 @@ public class PoseService {
         }
 
         try {
-            return Optional.of(GeodeticFrames.convert(bodyShape, frame, pose));
+            return Optional.of(GeodeticFrames.convert(referenceEllipsoid, frame, pose));
         } catch (OrekitException e) {
             return Optional.absent();
         }
@@ -286,7 +286,7 @@ public class PoseService {
         }
 
         try {
-            return Optional.of(GeodeticFrames.convert(bodyShape, frame, geopose));
+            return Optional.of(GeodeticFrames.convert(referenceEllipsoid, frame, geopose));
         } catch (OrekitException e) {
             return Optional.absent();
         }

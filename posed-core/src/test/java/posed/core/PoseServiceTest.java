@@ -205,8 +205,8 @@ public class PoseServiceTest {
     }
 
     @Test
-    public void testGetBodyShape() {
-        assertThat(poseService.getBodyShape(), is(not(nullValue())));
+    public void testGetReferenceEllipsoid() {
+        assertThat(poseService.getReferenceEllipsoid(), is(not(nullValue())));
     }
 
     @Test
@@ -312,7 +312,7 @@ public class PoseServiceTest {
                 new Pose(new Vector3D(0, 0, 0), rotation));
         poseService.update("rotated", NULL_POSE);
         GeodeticPose pose = poseService.convert("root", Pose.IDENTITY).get();
-        assertThat(pose, is(closeTo(poseService.getBodyShape(),
+        assertThat(pose, is(closeTo(poseService.getReferenceEllipsoid(),
                 new GeodeticPose(new GeodeticPoint(0, 0, 0), expected),
                 POSITION_ERROR, ANGLE_ERROR)));
     }

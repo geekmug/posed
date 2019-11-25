@@ -78,7 +78,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
     @Autowired
     public PoseGrpcService(final PoseService poseService) {
         this.poseService = checkNotNull(poseService);
-        bodyFrame = poseService.getBodyShape().getBodyFrame();
+        bodyFrame = poseService.getReferenceEllipsoid().getBodyFrame();
     }
 
     @Override

@@ -16,7 +16,6 @@
 
 package posed.core;
 
-import org.orekit.bodies.BodyShape;
 import org.orekit.frames.FramesFactory;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.springframework.context.annotation.Bean;
@@ -28,11 +27,11 @@ import org.springframework.context.annotation.Configuration;
 @ComponentScan
 public class PosedCoreConfiguration {
     /**
-     * Gets the body shape for the posed engine.
-     * @return body shape for the posed engine
+     * Gets the reference ellipsoid for the posed engine.
+     * @return reference ellipsoid for the posed engine
      */
     @Bean
-    public BodyShape getBodyShape() {
+    public ReferenceEllipsoid getReferenceEllipsoid() {
         return ReferenceEllipsoid.getWgs84(FramesFactory.getGCRF());
     }
 }

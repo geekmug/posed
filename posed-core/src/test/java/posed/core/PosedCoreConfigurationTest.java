@@ -23,7 +23,7 @@ import static org.junit.Assert.assertThat;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.orekit.bodies.BodyShape;
+import org.orekit.models.earth.ReferenceEllipsoid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -32,10 +32,10 @@ import org.springframework.test.context.junit4.SpringRunner;
 @ContextConfiguration(classes = PosedCoreConfiguration.class)
 public class PosedCoreConfigurationTest {
     @Autowired
-    private BodyShape bodyShape;
+    private ReferenceEllipsoid referenceEllipsoid;
 
     @Test
-    public void testBodyShape() {
-        assertThat(bodyShape, is(not(nullValue())));
+    public void testReferenceEllipsoid() {
+        assertThat(referenceEllipsoid, is(not(nullValue())));
     }
 }

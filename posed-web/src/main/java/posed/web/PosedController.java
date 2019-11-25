@@ -37,10 +37,10 @@ import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 
 import org.hipparchus.util.Pair;
-import org.orekit.bodies.BodyShape;
 import org.orekit.bodies.GeodeticPoint;
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.Frame;
+import org.orekit.models.earth.ReferenceEllipsoid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -101,7 +101,7 @@ public class PosedController {
 
     private final ObjectFactory factory = new net.opengis.kml.v_2_2_0.ObjectFactory();
     private final PoseService poseService;
-    private final BodyShape bodyShape;
+    private final ReferenceEllipsoid referenceEllipsoid;
     private final Frame bodyFrame;
 
     /**
@@ -111,8 +111,8 @@ public class PosedController {
     @Autowired
     public PosedController(final PoseService poseService) {
         this.poseService = checkNotNull(poseService);
-        bodyShape = poseService.getBodyShape();
-        bodyFrame = bodyShape.getBodyFrame();
+        referenceEllipsoid = poseService.getReferenceEllipsoid();
+        bodyFrame = referenceEllipsoid.getBodyFrame();
     }
 
     private String toCoordinates(GeodeticPoint position) {
@@ -125,7 +125,7 @@ public class PosedController {
     private List<JAXBElement<PlacemarkType>> createNode(String baseUrl, double scaleValue, Frame frame) {
         GeodeticPose pose;
         try {
-            pose = GeodeticFrames.convert(bodyShape, frame);
+            pose = GeodeticFrames.convert(referenceEllipsoid, frame);
         } catch (OrekitException e) {
             return Collections.emptyList();
         }
@@ -173,7 +173,7 @@ public class PosedController {
         GeodeticPose parentPose = null;
         if (parent != bodyFrame) {
             try {
-                parentPose = GeodeticFrames.convert(bodyShape, parent);
+                parentPose = GeodeticFrames.convert(referenceEllipsoid, parent);
             } catch (OrekitException e) {
                 // ignore
             }
