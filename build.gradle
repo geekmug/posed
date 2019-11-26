@@ -242,12 +242,22 @@ project(':posed-grpc') {
 
 project(':posed-service') {
   dependencies {
+    compile project(':posed-core')
     compile project(':posed-grpc')
     compile project(':posed-web')
+    compile group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+    compile group: 'com.google.guava', name: 'guava'
     compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
+    compile group: 'org.hipparchus', name: 'hipparchus-core'
+    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
+    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
+    compile group: 'org.orekit', name: 'orekit'
+    compile group: 'org.slf4j', name: 'slf4j-api'
     compile group: 'org.springframework.boot', name: 'spring-boot'
     compile group: 'org.springframework.boot', name: 'spring-boot-autoconfigure'
+    compile group: 'org.springframework', name: 'spring-beans'
     compile group: 'org.springframework', name: 'spring-context'
+    compile group: 'org.yaml', name: 'snakeyaml'
 
     permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
 
@@ -267,6 +277,7 @@ project(':posed-web') {
     compile group: 'com.google.guava', name: 'guava'
     compile group: 'com.sun.xml.bind', name: 'jaxb-impl'
     compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
+    compile group: 'io.projectreactor', name: 'reactor-core'
     compile group: 'org.hipparchus', name: 'hipparchus-core'
     compile group: 'org.jvnet.ogc', name: 'kml-v_2_2_0'
     compile group: 'org.orekit', name: 'orekit'

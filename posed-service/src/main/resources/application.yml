@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 ---
+posed:
+  save:
+    cron: '-'
+    filename: posed.yml
 server:
   http2:
     enabled: true

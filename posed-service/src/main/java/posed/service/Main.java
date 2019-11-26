@@ -19,12 +19,14 @@ package posed.service;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Import;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import posed.grpc.PosedGrpcConfiguration;
 import posed.web.PosedWebConfiguration;
 
 /** Main entrypoint for the pose service. */
 @SpringBootApplication
+@EnableScheduling
 @Import({PosedGrpcConfiguration.class, PosedWebConfiguration.class})
 public class Main {
     /**
