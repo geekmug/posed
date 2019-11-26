@@ -58,6 +58,7 @@ public class PosedGrpcConfiguration {
                 .setServiceName("PosedService")
                 .setService(GrpcService.builder()
                         .addService(service)
+                        .useBlockingTaskExecutor(true)
                         .build());
     }
 }

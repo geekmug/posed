@@ -71,6 +71,8 @@ import net.opengis.kml.v_2_2_0.StyleType;
 import posed.core.GeodeticFrames;
 import posed.core.GeodeticPose;
 import posed.core.PoseService;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
 /** REST controller for managing poses. */
 @RestController
@@ -262,17 +264,21 @@ public class PosedController {
      * @param scale scale at which to render the pose balls
      * @param flat whether or not to generate folders in the document
      * @return a KML document
-     * @throws Exception if something goes wrong
      */
     @GetMapping(path = "/posed.kml", produces = "application/vnd.google-earth.kml+xml")
-    public final byte[] getPosedKml(@RequestHeader(":authority") String host,
+    public final Mono<byte[]> getPosedKml(@RequestHeader(":authority") String host,
             @RequestParam(name = "scale", required = false, defaultValue = "1.0") double scale,
-            @RequestParam(name = "flat", required = false, defaultValue = "true") boolean flat)
-            throws Exception {
-        String baseUrl = String.format("http://%s/", host);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        writeKml(out, baseUrl, scale, flat);
-        return out.toByteArray();
+            @RequestParam(name = "flat", required = false, defaultValue = "true") boolean flat) {
+        return Mono.<byte[]>create(sink -> {
+            try {
+                String baseUrl = String.format("http://%s/", host);
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                writeKml(out, baseUrl, scale, flat);
+                sink.success(out.toByteArray());
+            } catch (Throwable t) {
+                sink.error(t);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     /**
@@ -280,28 +286,32 @@ public class PosedController {
      * @param scale scale at which to render the pose balls
      * @param flat whether or not to generate folders in the document
      * @return a KML document
-     * @throws Exception if something goes wrong
      */
     @GetMapping(path = "/posed.kmz", produces = "application/vnd.google-earth.kmz")
-    public final byte[] get(
+    public final Mono<byte[]> get(
             @RequestParam(name = "scale", required = false, defaultValue = "1.0") double scale,
-            @RequestParam(name = "flat", required = false, defaultValue = "true") boolean flat)
-            throws Exception {
-        ByteArrayOutputStream stream = new ByteArrayOutputStream();
-        ZipOutputStream zip = new ZipOutputStream(stream);
+            @RequestParam(name = "flat", required = false, defaultValue = "true") boolean flat) {
+        return Mono.<byte[]>create(sink -> {
+            try {
+                ByteArrayOutputStream stream = new ByteArrayOutputStream();
+                ZipOutputStream zip = new ZipOutputStream(stream);
 
-        for (Pair<String, String> entry : STATIC_FILES) {
-            zip.putNextEntry(new ZipEntry(entry.getKey()));
-            try (InputStream from = new ClassPathResource(entry.getValue(),
-                    getClass().getClassLoader()).getInputStream()) {
-                ByteStreams.copy(from, zip);
+                for (Pair<String, String> entry : STATIC_FILES) {
+                    zip.putNextEntry(new ZipEntry(entry.getKey()));
+                    try (InputStream from = new ClassPathResource(entry.getValue(),
+                            getClass().getClassLoader()).getInputStream()) {
+                        ByteStreams.copy(from, zip);
+                    }
+                }
+
+                zip.putNextEntry(new ZipEntry(KMZ_MAIN_FILENAME));
+                writeKml(zip, "", scale, flat);
+
+                zip.close();
+                sink.success(stream.toByteArray());
+            } catch (Throwable t) {
+                sink.error(t);
             }
-        }
-
-        zip.putNextEntry(new ZipEntry(KMZ_MAIN_FILENAME));
-        writeKml(zip, "", scale, flat);
-
-        zip.close();
-        return stream.toByteArray();
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 }
