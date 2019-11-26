@@ -113,7 +113,11 @@ message CreateRootRequest {
   string frame = 1;
 }
 
-message CreateRootReply {}
+message CreateRootReply {
+  oneof value {
+    GeodeticPoseReply pose = 1;
+  }
+}
 
 message CreateRequest {
   string parent = 1;
@@ -121,14 +125,20 @@ message CreateRequest {
   PoseRequest pose = 3;
 }
 
-message CreateReply {}
+message CreateReply {
+  oneof value {
+    GeodeticPoseReply pose = 1;
+  }
+}
 
 message DeleteRequest {
   string frame = 1;
   bool recursive = 2;
 }
 
-message DeleteReply {}
+message DeleteReply {
+  uint64 removed = 1;
+}
 
 message SubgraphRequest {
   string frame = 1;
@@ -151,7 +161,9 @@ message UpdateRequest {
   GeodeticPoseRequest pose = 2;
 }
 
-message UpdateReply {}
+message UpdateReply {
+  GeodeticPoseReply pose = 1;
+}
 
 message ConvertGeodeticRequest {
   string frame = 1;
