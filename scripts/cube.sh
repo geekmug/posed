@@ -7,7 +7,7 @@ while true; do
   #yaw=0
   echo '{"frame": "A"}' | evans -r -p 8080 --cli --call CreateRoot | jq -c > /dev/null
   echo "{\"frame\": \"A\"," \
-       "\"pose\": {\"position\": {\"latitude\": 90, \"longitude\": 0, \"hae\": 2000}," \
+       "\"geopose\": {\"position\": {\"latitude\": 90, \"longitude\": 0, \"hae\": 2000}," \
        "\"angles\": {\"roll\": 0, \"pitch\": $yaw, \"yaw\": $yaw}}}" \
     | evans -r -p 8080 --cli --call Update | jq -c
   

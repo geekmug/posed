@@ -3,7 +3,7 @@
 while true; do
   echo '{"frame": "base"}' | evans -r -p 8080 --cli --call CreateRoot | jq -c > /dev/null
   echo "{\"frame\": \"base\"," \
-       "\"pose\": {\"position\": {\"latitude\": 10, \"longitude\": -10, \"hae\": 500}," \
+       "\"geopose\": {\"position\": {\"latitude\": 10, \"longitude\": -10, \"hae\": 500}," \
        "\"angles\": {\"roll\": 0, \"pitch\": 0, \"yaw\": 0}}}" \
     | evans -r -p 8080 --cli --call Update | jq -c
 
