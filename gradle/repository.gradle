@@ -23,6 +23,8 @@ allprojects {
         password = "${artifactory_password}"
       }
     }
+    // Use public repositories if the private artifactory is unavailable.
+    jcenter();
     mavenLocal();
   }
 }

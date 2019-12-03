@@ -16,6 +16,7 @@
 
 buildscript {
   repositories {
+    // Use
     maven {
       url "${artifactory_contextUrl}/plugins-release"
       credentials {
@@ -23,6 +24,9 @@ buildscript {
         password = "${artifactory_password}"
       }
     }
+    // Use public repositories if the private artifactory is unavailable.
+    gradlePluginPortal()
+    jcenter()
   }
 
   dependencies {
