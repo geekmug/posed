@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import org.orekit.frames.Transform;
 import org.orekit.models.earth.Geoid;
+import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.time.AbsoluteDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -33,10 +34,12 @@ import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import posed.core.GeodeticFrames;
 import posed.core.GeodeticPose;
 import posed.core.NauticalAngles;
 import posed.core.Pose;
 import posed.core.PoseService;
+import posed.core.UnknownTransformException;
 import posed.grpc.proto.ConvertGeodeticReply;
 import posed.grpc.proto.ConvertGeodeticRequest;
 import posed.grpc.proto.ConvertLocalReply;
@@ -78,6 +81,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
 
     private final PoseService poseService;
     private final Geoid geoid;
+    private final ReferenceEllipsoid referenceEllipsoid;
     private final org.orekit.frames.Frame bodyFrame;
 
     /**
@@ -89,7 +93,8 @@ public class PoseGrpcService extends PoseServiceImplBase {
     public PoseGrpcService(final PoseService poseService, final Geoid geoid) {
         this.poseService = checkNotNull(poseService);
         this.geoid = checkNotNull(geoid);
-        bodyFrame = poseService.getReferenceEllipsoid().getBodyFrame();
+        referenceEllipsoid = poseService.getReferenceEllipsoid();
+        bodyFrame = referenceEllipsoid.getBodyFrame();
     }
 
     @Override
@@ -178,10 +183,21 @@ public class PoseGrpcService extends PoseServiceImplBase {
         org.orekit.frames.Frame parent = frame.getParent();
         if (parent != bodyFrame) {
             frameBuilder.setParent(parent.getName());
+
             Transform xfrm = parent.getTransformTo(frame, AbsoluteDate.PAST_INFINITY);
             frameBuilder.setPose(PosedProtos.encode(new Pose(
                     xfrm.getCartesian().getPosition(),
                     new NauticalAngles(xfrm.getRotation()))));
+
+            GeodeticPose geopose;
+            try {
+                geopose = GeodeticFrames.convert(referenceEllipsoid, frame);
+            } catch (UnknownTransformException e) {
+                geopose = null;
+            }
+            if (geopose != null) {
+                frameBuilder.setGeopose(PosedProtos.encode(geoid, geopose));
+            }
         }
         return frameBuilder.build();
     }

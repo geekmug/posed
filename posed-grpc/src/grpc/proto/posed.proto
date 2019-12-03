@@ -119,6 +119,9 @@ message Frame {
   string parent = 1;
   string frame = 2;
   PoseReply pose = 3;
+  oneof value {
+    GeodeticPoseReply geopose = 4;
+  }
 }
 
 message CreateRootRequest {
