@@ -23,19 +23,31 @@ option java_package = "posed.grpc.proto";
 option java_outer_classname = "PosedProto";
 
 service PoseService {
+  // Creates a new frame attached to the geocentric reference frame (GCRF).
   rpc CreateRoot (CreateRootRequest) returns (CreateRootReply) {}
+  // Creates (or updates) a frame attach to a given parent.
   rpc Create (CreateRequest) returns (CreateReply) {}
+  // Deletes a frame, if present.
   rpc Delete (DeleteRequest) returns (DeleteReply) {}
+  // Gets a depth-first, pre-order traversal for a subgraph containing the target.
+  // The subgraph is defined as rooted with the first frame that is attached to
+  // the root frame of the frame tree.
   rpc Subgraph (SubgraphRequest) returns (SubgraphReply) {}
+  // Gets a depth-first, pre-order traversal starting a given root.
   rpc Traverse (TraverseRequest) returns (TraverseReply) {}
 
+  // Updates the geodetic position of the given frame. Updates are nondeforming
+  // to the subgraph of this element, therefore the entire subgraph is updated.
   rpc Update (UpdateRequest) returns (UpdateReply) {}
 
+  // Gets a pose in a frame given a geodetic pose.
   rpc ConvertGeodeticToLocal (ConvertGeodeticRequest) returns (ConvertLocalReply) {}
   rpc ConvertGeodeticToLocalStream (ConvertGeodeticRequest) returns (stream ConvertLocalReply) {}
+  // Gets a geodetic pose for a pose in a given frame.
   rpc ConvertLocalToGeodetic (ConvertLocalRequest) returns (ConvertGeodeticReply) {}
   rpc ConvertLocalToGeodeticStream (ConvertLocalRequest) returns (stream ConvertGeodeticReply) {}
 
+  // Gets the apparent pose in a destination frame for a source frame and pose.
   rpc Transform (TransformRequest) returns (TransformReply) {}
   rpc TransformStream (TransformRequest) returns (stream TransformReply) {}
 }
