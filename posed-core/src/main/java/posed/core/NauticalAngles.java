@@ -26,7 +26,6 @@ import static org.hipparchus.util.FastMath.toDegrees;
 import org.hipparchus.geometry.euclidean.threed.Rotation;
 import org.hipparchus.geometry.euclidean.threed.RotationConvention;
 import org.hipparchus.geometry.euclidean.threed.RotationOrder;
-import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.hipparchus.util.MathUtils;
 
 import com.google.common.base.MoreObjects;
@@ -157,11 +156,9 @@ public final class NauticalAngles {
      * @return Hipparchus Rotation
      */
     public Rotation toTransformRotation() {
-        RotationConvention convention = RotationConvention.VECTOR_OPERATOR;
-        Rotation r1 = new Rotation(Vector3D.MINUS_I, roll, convention);
-        Rotation r2 = new Rotation(Vector3D.MINUS_J, pitch, convention);
-        Rotation r3 = new Rotation(Vector3D.MINUS_K, yaw, convention);
-        return r1.compose(r2.compose(r3, convention), convention);
+        return new Rotation(
+                RotationOrder.XYZ, RotationConvention.VECTOR_OPERATOR,
+                -roll, -pitch, -yaw);
     }
 
     /**
