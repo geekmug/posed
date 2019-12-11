@@ -1,0 +1,13 @@
+{
+  "name": "czml-writer",
+  "version": "0.0.1",
+  "description": "CZML JSON Schema",
+  "dependencies": {},
+  "devDependencies": {
+    "ajv": "^6.10.0"
+  },
+  "scripts": {
+    "validate": "node validate.js"
+  },
+  "license": "Apache-2.0"
+}

@@ -17,6 +17,7 @@
 rootProject.name = 'posed-parent'
 
 include 'posed-core'
+include 'posed-czml'
 include 'posed-grpc'
 include 'posed-service'
 include 'posed-web'

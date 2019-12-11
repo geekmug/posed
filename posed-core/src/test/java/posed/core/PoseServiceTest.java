@@ -23,12 +23,14 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThan;
+import static org.hamcrest.Matchers.oneOf;
 import static org.hipparchus.util.FastMath.toRadians;
 import static org.junit.Assert.assertThat;
 import static posed.core.PosedMatchers.closeTo;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
@@ -48,6 +50,7 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 
+import posed.core.frametree.ChangeTrackingFrameTree;
 import reactor.core.publisher.UnicastProcessor;
 import reactor.test.StepVerifier;
 
@@ -426,6 +429,37 @@ public class PoseServiceTest {
             first.onError(new RuntimeException("test"));
         })
         .expectError()
+        .verify();
+    }
+
+    @Test
+    public void testGetChangeStream() {
+        Consumer<ChangeTrackingFrameTree.Change> assertSetupFrames = change -> {
+            ChangeTrackingFrameTree.Created created = (ChangeTrackingFrameTree.Created) change;
+            assertThat(created.getFrame().getName(), is(oneOf("GCRF", "root", "front", "right", "below")));
+        };
+
+        StepVerifier.withVirtualTime(() -> poseService.getChangeStream())
+        .expectSubscription()
+        .assertNext(assertSetupFrames)
+        .assertNext(assertSetupFrames)
+        .assertNext(assertSetupFrames)
+        .assertNext(assertSetupFrames)
+        .assertNext(assertSetupFrames)
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.remove("front"))
+        .assertNext(change -> {
+            ChangeTrackingFrameTree.Removed removed = (ChangeTrackingFrameTree.Removed) change;
+            assertThat(removed.getName(), is(equalTo("front")));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.create("root", "below", Pose.IDENTITY))
+        .assertNext(change -> {
+            ChangeTrackingFrameTree.Created created = (ChangeTrackingFrameTree.Created) change;
+            assertThat(created.getFrame().getName(), is(equalTo("below")));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .thenCancel()
         .verify();
     }
 }

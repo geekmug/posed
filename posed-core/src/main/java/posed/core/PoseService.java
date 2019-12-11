@@ -19,7 +19,6 @@ package posed.core;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
 
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.FixedTransformProvider;
@@ -35,17 +34,21 @@ import org.springframework.stereotype.Service;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import posed.core.frametree.ChangeTrackingFrameTree;
+import posed.core.frametree.ChangeTrackingFrameTree.Change;
 import posed.core.frametree.CopyOnWriteFrameTree;
 import posed.core.frametree.FrameTree;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.ReplayProcessor;
+import reactor.core.scheduler.Schedulers;
 
 /** Service instance for managing poses. */
 @Service
 public class PoseService {
     /**
      * Merge data from {@link Publisher} sequences contained in an array / vararg
-     * into an interleaved merged sequence. Unlike {@link #concat(Publisher) concat},
+     * into an interleaved merged sequence. Unlike {@link Flux#concat(Publisher) concat},
      * sources are subscribed to eagerly.
      * <p>
      * <img class="marble" src="doc-files/marbles/mergeFixedSources.svg" alt="">
@@ -80,7 +83,7 @@ public class PoseService {
             new ConcurrentHashMap<>();
     private final ReferenceEllipsoid referenceEllipsoid;
     private final Frame bodyFrame;
-    private final CopyOnWriteFrameTree tree;
+    private final ChangeTrackingFrameTree<CopyOnWriteFrameTree> tree;
 
     /**
      * Creates a pose service with a given geodetic body.
@@ -90,7 +93,25 @@ public class PoseService {
     public PoseService(final ReferenceEllipsoid referenceEllipsoid) {
         this.referenceEllipsoid = checkNotNull(referenceEllipsoid);
         bodyFrame = referenceEllipsoid.getBodyFrame();
-        tree = new CopyOnWriteFrameTree(bodyFrame);
+        tree = new ChangeTrackingFrameTree<>(new CopyOnWriteFrameTree(bodyFrame));
+        tree.getChangeStream().subscribe(this::handleChangeStream);
+    }
+
+    @SuppressFBWarnings("ITC_INHERITANCE_TYPE_CHECKING")
+    private void handleChangeStream(Change change) {
+        if (change instanceof ChangeTrackingFrameTree.Created) {
+            Frame frame = ((ChangeTrackingFrameTree.Created) change).getFrame();
+            ReplayProcessor<Boolean> processor = updateProcessors.get(frame.getName());
+            if (processor != null) {
+                processor.onNext(Boolean.TRUE);
+            }
+        } else {
+            String name = ((ChangeTrackingFrameTree.Removed) change).getName();
+            ReplayProcessor<Boolean> processor = updateProcessors.get(name);
+            if (processor != null) {
+                processor.onComplete();
+            }
+        }
     }
 
     /**
@@ -99,6 +120,18 @@ public class PoseService {
      */
     public final ReferenceEllipsoid getReferenceEllipsoid() {
         return referenceEllipsoid;
+    }
+
+    /**
+     * Gets a stream of {@code Change}s for this {@code FrameTree}.
+     *
+     * <p>The produced stream is based on <em>potential</em> updates and may
+     * produce updates that have no apparent change.
+     *
+     * @return a stream of {@code Change}s for this {@code FrameTree}
+     */
+    public final Flux<ChangeTrackingFrameTree.Change> getChangeStream() {
+        return tree.getChangeStream();
     }
 
     /**
@@ -158,16 +191,7 @@ public class PoseService {
      * @param xfrm transform provider describing the new frame
      */
     public final void create(String parentName, String name, TransformProvider xfrm) {
-        Supplier<Iterable<Frame>> updated = tree.update(parentName, name, xfrm);
-        if (updated != null) {
-            updated.get().forEach(frame -> {
-                // Notify this and all of the children about an update.
-                ReplayProcessor<Boolean> processor = updateProcessors.get(frame.getName());
-                if (processor != null) {
-                    processor.onNext(Boolean.TRUE);
-                }
-            });
-        }
+        tree.create(parentName, name, xfrm);
     }
 
     /**
@@ -209,10 +233,6 @@ public class PoseService {
      */
     public final void remove(String name) {
         tree.remove(name);
-        ReplayProcessor<Boolean> processor = updateProcessors.remove(name);
-        if (processor != null) {
-            processor.onComplete();
-        }
     }
 
     /**
@@ -225,7 +245,7 @@ public class PoseService {
      * @param pose pose of the given frame
      */
     public final void update(String name, GeodeticPose pose) {
-        FrameTree treeCopy = new CopyOnWriteFrameTree(tree);
+        FrameTree treeCopy = new CopyOnWriteFrameTree(tree.getDelegate());
 
         // Updates are always done to the frame that is attached to GCRF.
         Frame frame = treeCopy.get(name);
@@ -259,7 +279,7 @@ public class PoseService {
         checkNotNull(dst);
         checkNotNull(pose);
 
-        FrameTree treeCopy = new CopyOnWriteFrameTree(tree);
+        FrameTree treeCopy = new CopyOnWriteFrameTree(tree.getDelegate());
 
         Frame srcFrame = treeCopy.get(src);
         if (srcFrame == null) {
@@ -275,7 +295,9 @@ public class PoseService {
 
     private Flux<Boolean> getOrMakeUpdateProcessor(String name) {
         return updateProcessors.computeIfAbsent(name,
-                frameName -> ReplayProcessor.cacheLast()).hide();
+                frameName -> ReplayProcessor.cacheLast())
+                .subscribeOn(Schedulers.boundedElastic())
+                .hide();
     }
 
     /**

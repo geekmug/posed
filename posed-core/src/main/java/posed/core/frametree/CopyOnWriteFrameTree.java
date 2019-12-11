@@ -23,7 +23,6 @@ import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Supplier;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -113,8 +112,7 @@ public final class CopyOnWriteFrameTree implements FrameTree {
         /**
          * Creates a copy of a state with an edit.
          * @param state existing state
-         * @param target frame to be edited
-         * @param targetXfrm new transform for target frame
+         * @param operation edit to perform
          */
         private State(final State state, final StateOperation operation) {
             this(state.root, state.frames.size());
@@ -215,21 +213,8 @@ public final class CopyOnWriteFrameTree implements FrameTree {
         create(stateRef.get().root.getName(), name, (TransformProvider) null);
     }
 
-    /**
-     * Creates (or updates) a frame attach to a given parent.
-     *
-     * <p>If this frame already exists, then it will be updated with the given
-     * transform provider as long as the parent is the same.
-     *
-     * <p>All transform providers should be immutable to maintain the coherency
-     * of operations on this frame tree.
-     *
-     * @param parentName name of the parent frame
-     * @param name name of the new frame
-     * @param xfrm transform provider describing the new frame
-     * @return a supplier of a iterable of frames that were effected
-     */
-    public Supplier<Iterable<Frame>> update(String parentName, String name, TransformProvider xfrm) {
+    @Override
+    public void create(String parentName, String name, TransformProvider xfrm) {
         checkNotNull(parentName);
         checkNotNull(name);
 
@@ -245,10 +230,8 @@ public final class CopyOnWriteFrameTree implements FrameTree {
 
             if (frame != null) {
                 copyAndEdit(new UpdateStateOperation(frame, xfrm));
-                return () -> Traverser.forGraph(state.graph).depthFirstPreOrder(frame);
             } else {
                 copyAndEdit(new CreateStateOperation(parent, name, xfrm));
-                return null;
             }
         } finally {
             lock.unlock();
@@ -256,48 +239,13 @@ public final class CopyOnWriteFrameTree implements FrameTree {
     }
 
     @Override
-    public void create(String parentName, String name, TransformProvider xfrm) {
-        update(parentName, name, xfrm);
-    }
-
-    /**
-     * Creates (or updates) a frame attach to a given parent.
-     *
-     * <p>If this frame already exists, then it will be updated with the given
-     * transform as long as the parent is the same.
-     *
-     * @param parentName name of the parent frame
-     * @param name name of the new frame
-     * @param xfrm transform describing the new frame
-     * @return a supplier of a iterable of frames that were effected
-     */
-    public Supplier<Iterable<Frame>> update(String parentName, String name, Transform xfrm) {
-        return update(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
     public void create(String parentName, String name, Transform xfrm) {
-        update(parentName, name, xfrm);
-    }
-
-    /**
-     * Creates (or updates) a frame attach to a given parent.
-     *
-     * <p>If this frame already exists, then it will be updated with the given
-     * pose as long as the parent is the same.
-     *
-     * @param parentName name of the parent frame
-     * @param name name of the new frame
-     * @param pose pose describing the new frame
-     * @return a supplier of a iterable of frames that were effected
-     */
-    public Supplier<Iterable<Frame>> update(String parentName, String name, Pose pose) {
-        return update(parentName, name, Frames.makeTransform(pose));
+        create(parentName, name, new FixedTransformProvider(xfrm));
     }
 
     @Override
     public void create(String parentName, String name, Pose pose) {
-        update(parentName, name, pose);
+        create(parentName, name, Frames.makeTransform(pose));
     }
 
     @Override

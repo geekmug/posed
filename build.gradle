@@ -41,6 +41,7 @@ buildscript {
     classpath group: 'com.google.guava', name: 'guava', version: guavaVersion
     classpath group: 'com.google.protobuf', name: 'protobuf-gradle-plugin', version: protobufGradlePluginVersion
     classpath group: 'io.spring.gradle', name: 'dependency-management-plugin', version: springDependencyManagementPluginVersion
+    classpath group: 'org.jsonschema2pojo', name: 'jsonschema2pojo-gradle-plugin', version: js2pPluginVersion
   }
 }
 
@@ -108,12 +109,14 @@ allprojects {
 
 project(':posed-core') {
   dependencies {
+    compile group: 'com.github.spotbugs', name: 'spotbugs-annotations'
     compile group: 'com.google.code.findbugs', name: 'jsr305'
     compile group: 'com.google.guava', name: 'guava'
     compile group: 'io.projectreactor', name: 'reactor-core'
     compile group: 'org.hipparchus', name: 'hipparchus-core'
     compile group: 'org.hipparchus', name: 'hipparchus-geometry'
     compile group: 'org.orekit', name: 'orekit'
+    compile group: 'org.reactivestreams', name: 'reactive-streams'
     compile group: 'org.springframework', name: 'spring-beans'
     compile group: 'org.springframework', name: 'spring-context'
 
@@ -276,16 +279,43 @@ project(':posed-service') {
   ], ['-XX:+UseConcMarkSweepGC', '-Xms64m', '-Xmx256m'])
 }
 
+project(':posed-czml') {
+  apply plugin: 'jsonschema2pojo'
+
+  jsonSchema2Pojo {
+    classNamePrefix = 'Czml';
+    generateBuilders = true;
+    inclusionLevel = 'NON_EMPTY';
+    removeOldOutput = true;
+    source = files('src/main/json')
+    targetPackage = 'posed.czml';
+  }
+
+  dependencies {
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations'
+  }
+
+  compileJava.options.errorprone.enabled = false
+  licenseMain.enabled = false
+  spotbugsMain.enabled = false
+}
+
 project(':posed-web') {
   dependencies {
     compile project(':posed-core')
+    compile project(':posed-czml')
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core'
+    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind'
     compile group: 'com.google.guava', name: 'guava'
+    compile group: 'com.linecorp.armeria', name: 'armeria'
+    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
     compile group: 'com.sun.xml.bind', name: 'jaxb-impl'
     compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-autoconfigure'
     compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
     compile group: 'com.linecorp.armeria', name: 'armeria'
     compile group: 'io.projectreactor', name: 'reactor-core'
     compile group: 'org.hipparchus', name: 'hipparchus-core'
+    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
     compile group: 'org.jvnet.ogc', name: 'kml-v_2_2_0'
     compile group: 'org.orekit', name: 'orekit'
     compile group: 'org.springframework', name: 'spring-context'
@@ -297,6 +327,9 @@ project(':posed-web') {
 
     runtime group: 'org.glassfish.jaxb', name: 'jaxb-runtime'
   }
+
+  licenseMain.exclude "/static/Cesium/**"
+  licenseMain.exclude "/static/CesiumViewer/viewerCesiumNavigationMixin.js"
 }
 
 distributions {
