@@ -40,7 +40,9 @@ import org.hipparchus.util.Pair;
 import org.orekit.bodies.GeodeticPoint;
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.Frame;
+import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
+import org.orekit.time.AbsoluteDate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -103,25 +105,32 @@ public class PosedController {
 
     private final ObjectFactory factory = new net.opengis.kml.v_2_2_0.ObjectFactory();
     private final PoseService poseService;
+    private final Geoid geoid;
     private final ReferenceEllipsoid referenceEllipsoid;
     private final Frame bodyFrame;
 
     /**
      * Creates a REST controller service using a given pose service.
      * @param poseService pose service
+     * @param geoid geoid to use when encoding and decoding AMSL
      */
     @Autowired
-    public PosedController(final PoseService poseService) {
+    public PosedController(final PoseService poseService, final Geoid geoid) {
         this.poseService = checkNotNull(poseService);
+        this.geoid = checkNotNull(geoid);
         referenceEllipsoid = poseService.getReferenceEllipsoid();
         bodyFrame = referenceEllipsoid.getBodyFrame();
     }
 
-    private String toCoordinates(GeodeticPoint position) {
+    private String toCoordinates(Geoid geoid, GeodeticPoint position) {
+        // KML altitudes are relative to the EGM96 geoid, not the ellipsoid.
+        double undulation = geoid.getUndulation(
+                position.getLatitude(), position.getLongitude(),
+                AbsoluteDate.PAST_INFINITY);
         return String.format("%f,%f,%f",
                 toDegrees(position.getLongitude()),
                 toDegrees(position.getLatitude()),
-                position.getAltitude());
+                position.getAltitude() - undulation);
     }
 
     private List<JAXBElement<PlacemarkType>> createNode(String baseUrl, double scaleValue, Frame frame) {
@@ -133,9 +142,14 @@ public class PosedController {
         }
 
         LocationType location = factory.createLocationType();
-        location.setLongitude(toDegrees(pose.getPosition().getLongitude()));
-        location.setLatitude(toDegrees(pose.getPosition().getLatitude()));
-        location.setAltitude(pose.getPosition().getAltitude());
+        GeodeticPoint position = pose.getPosition();
+        location.setLongitude(toDegrees(position.getLongitude()));
+        location.setLatitude(toDegrees(position.getLatitude()));
+        // KML altitudes are relative to the EGM96 geoid, not the ellipsoid.
+        double undulation = geoid.getUndulation(
+                position.getLatitude(), position.getLongitude(),
+                AbsoluteDate.PAST_INFINITY);
+        location.setAltitude(position.getAltitude() - undulation);
 
         /* The good news is that KML viewers apply these rotations in the
          * traditional ZY'X'' order that we use for our rotations, but the bad
@@ -185,8 +199,8 @@ public class PosedController {
             LineStringType lineString = factory.createLineStringType();
             lineString.setAltitudeModeGroup(factory.createAltitudeMode(AltitudeModeEnumType.ABSOLUTE));
             lineString.setCoordinates(ImmutableList.of(
-                    toCoordinates(parentPose.getPosition()),
-                    toCoordinates(pose.getPosition())));
+                    toCoordinates(geoid, parentPose.getPosition()),
+                    toCoordinates(geoid, position)));
 
             LineStyleType lineStyle = factory.createLineStyleType();
             lineStyle.setColor(LINE_COLOR);

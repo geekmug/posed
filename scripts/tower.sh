@@ -2,7 +2,7 @@
 
 while true; do
   echo '{"frame": "base"}' | evans -r -p 8080 --cli --call CreateRoot | jq -c > /dev/null
-  echo '{"frame": "base", "geopose": {"position": {"latitude": 39.177800, "longitude": -86.589451, "hae": 276}, "angles": {"roll": 0, "pitch": 0, "yaw": 0}}}' | evans -r -p 8080 --cli --call Update | jq -c
+  echo '{"frame": "base", "geopose": {"position": {"latitude": 39.177800, "longitude": -86.589451, "amsl": 272}, "angles": {"roll": 0, "pitch": 0, "yaw": 0}}}' | evans -r -p 8080 --cli --call Update | jq -c
 
   echo '{"frame": "tower", "parent": "base", "pose": {"position": {"z": -30}, "angles": {}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
   echo '{"frame": "ge9181", "parent": "tower", "pose": {"position": {}, "angles": {}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
