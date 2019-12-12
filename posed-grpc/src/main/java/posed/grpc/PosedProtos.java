@@ -21,8 +21,11 @@ import static org.hipparchus.util.FastMath.toDegrees;
 import static org.hipparchus.util.FastMath.toRadians;
 
 import org.hipparchus.geometry.euclidean.threed.Rotation;
+import org.hipparchus.geometry.euclidean.threed.RotationConvention;
+import org.hipparchus.geometry.euclidean.threed.RotationOrder;
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.hipparchus.util.MathUtils;
+import org.hipparchus.util.Pair;
 import org.orekit.bodies.GeodeticPoint;
 import org.orekit.models.earth.Geoid;
 import org.orekit.time.AbsoluteDate;
@@ -30,6 +33,8 @@ import org.orekit.time.AbsoluteDate;
 import posed.core.GeodeticPose;
 import posed.core.NauticalAngles;
 import posed.core.Pose;
+import posed.grpc.proto.Cartesian;
+import posed.grpc.proto.Spherical;
 
 final class PosedProtos {
     public static NauticalAngles decode(posed.grpc.proto.Quaternion quaternion) {
@@ -123,32 +128,63 @@ final class PosedProtos {
                 .build();
     }
 
-    public static Vector3D decode(posed.grpc.proto.Position position) {
+    public static Vector3D decode(posed.grpc.proto.Cartesian position) {
         return new Vector3D(position.getX(), position.getY(), position.getZ());
     }
 
-    public static posed.grpc.proto.Position encode(Vector3D position) {
-        return posed.grpc.proto.Position.newBuilder()
+    public static Vector3D decode(posed.grpc.proto.Spherical position) {
+        Rotation r = new Rotation(RotationOrder.ZYX,
+                RotationConvention.VECTOR_OPERATOR,
+                toRadians(position.getAzimuth()),
+                toRadians(position.getElevation()), 0);
+        return r.applyTo(Vector3D.PLUS_I).scalarMultiply(position.getRadius());
+    }
+
+    public static Pair<posed.grpc.proto.Cartesian, posed.grpc.proto.Spherical> encode(
+            Vector3D position) {
+        return Pair.create(posed.grpc.proto.Cartesian.newBuilder()
                 .setX(position.getX())
                 .setY(position.getY())
                 .setZ(position.getZ())
-                .build();
+                .build(),
+                posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(toDegrees(position.getAlpha()))
+                .setElevation(toDegrees(-position.getDelta()))
+                .setRadius(position.getNorm())
+                .build());
     }
 
     public static Pose decode(posed.grpc.proto.PoseRequest pose) {
+        Vector3D position;
+        switch (pose.getPositionCase()) {
+        case CARTESIAN:
+            position = decode(pose.getCartesian());
+            break;
+        case SPHERICAL:
+            position = decode(pose.getSpherical());
+            break;
+        default:
+            throw new IllegalArgumentException("no position specified");
+        }
+        NauticalAngles orientation;
         switch (pose.getRotationCase()) {
         case ANGLES:
-            return new Pose(decode(pose.getPosition()), decode(pose.getAngles()));
+            orientation = decode(pose.getAngles());
+            break;
         case QUATERNION:
-            return new Pose(decode(pose.getPosition()), decode(pose.getQuaternion()));
+            orientation = decode(pose.getQuaternion());
+            break;
         default:
             throw new IllegalArgumentException("no rotation specified");
         }
+        return new Pose(position, orientation);
     }
 
     public static posed.grpc.proto.PoseReply encode(Pose pose) {
+        Pair<Cartesian, Spherical> encoded = encode(pose.getPosition());
         return posed.grpc.proto.PoseReply.newBuilder()
-                .setPosition(encode(pose.getPosition()))
+                .setCartesian(encoded.getFirst())
+                .setSpherical(encoded.getSecond())
                 .setAngles(encode(pose.getOrientation(), false))
                 .setQuaternion(encode(pose.getOrientation().toRotation()))
                 .build();

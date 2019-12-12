@@ -52,10 +52,16 @@ service PoseService {
   rpc TransformStream (TransformRequest) returns (stream TransformReply) {}
 }
 
-message Position {
+message Cartesian {
   double x = 1;
   double y = 2;
   double z = 3;
+}
+
+message Spherical {
+  double azimuth = 1;
+  double elevation = 2;
+  double radius = 3;
 }
 
 message GeodeticPositionRequest {
@@ -88,17 +94,21 @@ message Quaternion {
 }
 
 message PoseRequest {
-  Position position = 1;
+  oneof position {
+    Cartesian cartesian = 1;
+    Spherical spherical = 2;
+  }
   oneof rotation {
-    NauticalAngles angles = 2;
-    Quaternion quaternion = 3;
+    NauticalAngles angles = 3;
+    Quaternion quaternion = 4;
   }
 }
 
 message PoseReply {
-  Position position = 1;
-  NauticalAngles angles = 2;
-  Quaternion quaternion = 3;
+  Cartesian cartesian = 1;
+  Spherical spherical = 2;
+  NauticalAngles angles = 3;
+  Quaternion quaternion = 4;
 }
 
 message GeodeticPoseRequest {

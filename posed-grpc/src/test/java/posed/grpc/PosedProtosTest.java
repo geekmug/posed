@@ -20,7 +20,9 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hipparchus.util.FastMath.PI;
 import static org.junit.Assert.assertThat;
+import static posed.core.PosedMatchers.closeTo;
 
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.orekit.bodies.GeodeticPoint;
@@ -64,5 +66,65 @@ public class PosedProtosTest {
          * to ensure that we didn't flip the sign on the offset. */
         assertThat(PosedProtos.encode(geoid, new GeodeticPoint(0, 0, 0)).getAmsl(),
                 is(closeTo(-17.0, 1)));
+    }
+
+    @Test
+    public void testDecodeSphericalForward() {
+        posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(0)
+                .setElevation(0)
+                .setRadius(100)
+                .build();
+        assertThat(PosedProtos.decode(v), is(closeTo(new Vector3D(100, 0, 0), 1)));
+    }
+
+    @Test
+    public void testDecodeSphericalLeft() {
+        posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(-90)
+                .setElevation(0)
+                .setRadius(100)
+                .build();
+        assertThat(PosedProtos.decode(v), is(closeTo(new Vector3D(0, -100, 0), 1)));
+    }
+
+    @Test
+    public void testDecodeSphericalRight() {
+        posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(90)
+                .setElevation(0)
+                .setRadius(100)
+                .build();
+        assertThat(PosedProtos.decode(v), is(closeTo(new Vector3D(0, 100, 0), 1)));
+    }
+
+    @Test
+    public void testDecodeSphericalUp() {
+        posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(0)
+                .setElevation(90)
+                .setRadius(100)
+                .build();
+        assertThat(PosedProtos.decode(v), is(closeTo(new Vector3D(0, 0, -100), 1)));
+    }
+
+    @Test
+    public void testDecodeSphericalDown() {
+        posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(0)
+                .setElevation(-90)
+                .setRadius(100)
+                .build();
+        assertThat(PosedProtos.decode(v), is(closeTo(new Vector3D(0, 0, 100), 1)));
+    }
+
+    @Test
+    public void testDecodeSpherical() {
+        posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
+                .setAzimuth(45)
+                .setElevation(45)
+                .setRadius(100)
+                .build();
+        assertThat(PosedProtos.decode(v), is(closeTo(new Vector3D(50, 50, -70), 1)));
     }
 }

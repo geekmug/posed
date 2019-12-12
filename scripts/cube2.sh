@@ -11,12 +11,12 @@ while true; do
        "\"angles\": {\"roll\": 0, \"pitch\": $yaw, \"yaw\": $yaw}}}" \
     | evans -r -p 8080 --cli --call Update | jq -c
   
-  echo '{"parent": "A", "frame": "B", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
-  echo '{"parent": "B", "frame": "C", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
-  echo '{"parent": "C", "frame": "D", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"roll": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
-  echo '{"parent": "D", "frame": "E", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"roll": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
-  echo '{"parent": "E", "frame": "F", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
-  echo '{"parent": "F", "frame": "G", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
-  echo '{"parent": "G", "frame": "H", "pose": {"position": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "A", "frame": "B", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "B", "frame": "C", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "C", "frame": "D", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"roll": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "D", "frame": "E", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"roll": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "E", "frame": "F", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "F", "frame": "G", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
+  echo '{"parent": "G", "frame": "H", "pose": {"cartesian": {"x": 0, "y": 100000, "z": 0}, "angles": {"yaw": -90}}}' | evans -r -p 8080 --cli --package posed  --call Create >/dev/null
   sleep 1
 done
