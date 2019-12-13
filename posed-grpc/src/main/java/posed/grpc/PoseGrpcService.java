@@ -188,16 +188,16 @@ public class PoseGrpcService extends PoseServiceImplBase {
             frameBuilder.setPose(PosedProtos.encode(new Pose(
                     xfrm.getCartesian().getPosition(),
                     new NauticalAngles(xfrm.getRotation()))));
+        }
 
-            GeodeticPose geopose;
-            try {
-                geopose = GeodeticFrames.convert(referenceEllipsoid, frame);
-            } catch (UnknownTransformException e) {
-                geopose = null;
-            }
-            if (geopose != null) {
-                frameBuilder.setGeopose(PosedProtos.encode(geoid, geopose));
-            }
+        GeodeticPose geopose;
+        try {
+            geopose = GeodeticFrames.convert(referenceEllipsoid, frame);
+        } catch (UnknownTransformException e) {
+            geopose = null;
+        }
+        if (geopose != null) {
+            frameBuilder.setGeopose(PosedProtos.encode(geoid, geopose));
         }
         return frameBuilder.build();
     }
