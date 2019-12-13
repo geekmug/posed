@@ -21,6 +21,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+import com.linecorp.armeria.common.grpc.GrpcSerializationFormats;
 import com.linecorp.armeria.server.grpc.GrpcService;
 import com.linecorp.armeria.spring.GrpcServiceRegistrationBean;
 
@@ -58,6 +59,8 @@ public class PosedGrpcConfiguration {
                 .setServiceName("PosedService")
                 .setService(GrpcService.builder()
                         .addService(service)
+                        .supportedSerializationFormats(GrpcSerializationFormats.values())
+                        .enableUnframedRequests(true)
                         .useBlockingTaskExecutor(true)
                         .build());
     }

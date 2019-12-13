@@ -281,7 +281,9 @@ project(':posed-web') {
     compile project(':posed-core')
     compile group: 'com.google.guava', name: 'guava'
     compile group: 'com.sun.xml.bind', name: 'jaxb-impl'
+    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-autoconfigure'
     compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
+    compile group: 'com.linecorp.armeria', name: 'armeria'
     compile group: 'io.projectreactor', name: 'reactor-core'
     compile group: 'org.hipparchus', name: 'hipparchus-core'
     compile group: 'org.jvnet.ogc', name: 'kml-v_2_2_0'
