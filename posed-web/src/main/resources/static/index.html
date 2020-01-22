@@ -23,21 +23,39 @@ limitations under the License.
 body {
   font-family: -apple-system,system-ui,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",sans-serif;
 }
-a {
+a, button {
   color: #0056b3;
   text-decoration: none;
+}
+button {
+  border: none;
+  font-size: 1em;
+  padding: 0;
+}
+form {
+  display: inline;
 }
   </style>
 </head>
 <body style="">
-<div class="container-fluid">
+<div>
 <h2>Helpful Links</h2>
-  <ul>
-    <li><a href="/docs/">Service Reflection</a></li>
-    <li><a href="/CesiumViewer/">Cesium Viewer</a></li>
-    <li><a href="/posed.kml">KML Document</a></li>
-    <li><a href="/posed.kmz">KMZ Document</a></li>
-  </ul>
+<ul>
+  <li><form action="/CesiumViewer/"><button type="submit">Cesium Viewer</button> (Scale: <input type="text" name="scale" value="1" size="5"/>)</form> - Real-time In-Browser Viewer of the State of Pose Engine.</li>
+  <li><a href="/posed.czml">CZML Document</a> - Streaming CZML Document for the State of Pose Engine.</li>
+  <li><a href="/posed.kml">KML Document</a> - The State of Pose Engine in KML (e.g. Add a "Network Link" to Google Earth).</li>
+  <li><a href="/posed.kmz">KMZ Document</a> - The State of Pose Engine in KMZ (standalone, zipped KML).</li>
+  <li><a href="/docs/">Service Reflection</a> - Web Tools for Interacting with the Pose Engine.</li>
+</ul>
+</div>
+<div>
+<h2>Server Command-Line Options</h2>
+<ul>
+  <li><code>--posed.save.cron=string</code> (default: <em>never</em>) - Cron expression (<code>"&lt;second&gt; &lt;minute&gt; &lt;hour&gt; &lt;day&gt; &lt;month&gt; &lt;weekday&gt;"</code>) for describing when to save the state.</li>
+  <li><code>--posed.save.filename=string</code> (default: <code>posed.yml</code>) - Filename to use for saving the state of the Pose Engine.</li>
+  <li><code>--server.address=ip</code> (default: <em>wildcard</em>) - What address the server should be bound.</li>
+  <li><code>--server.port=number</code> (default: <code>8080</code>) - What port the server should be bound.</li>
+</ul>
 </div>
 </body>
 </html>
