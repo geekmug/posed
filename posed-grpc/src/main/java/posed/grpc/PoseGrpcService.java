@@ -186,7 +186,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
 
             Transform xfrm = parent.getTransformTo(frame, AbsoluteDate.PAST_INFINITY);
             frameBuilder.setPose(PosedProtos.encode(new Pose(
-                    xfrm.getCartesian().getPosition(),
+                    xfrm.getCartesian().getPosition().negate(),
                     new NauticalAngles(xfrm.getRotation()))));
         }
 
