@@ -59,4 +59,4 @@ atlassian-ide-plugin.xml
 .nbattrs
 
 # AsciidocFX directories
-/doc/images/
+/doc/images/plantuml-*

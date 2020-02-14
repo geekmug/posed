@@ -1,0 +1,626 @@
+ifndef::imagesdir[:imagesdir: images]
+
+= Pose Engine Developer Guide
+:docinfo:
+:sectnums:
+:toc: left
+:toclevels: 3
+
+== Overview
+
+The *Pose Engine* provides a service that supports *converting* poses from
+one coordinate system to another, and *transforming* poses from one frame
+of reference into another. The service operates in either local or geodetic
+coordinates, where the geodetic reference is defined by EPSG:4326. Local
+coordinates and geodetic rotations always use a Front-Right-Down (FRD)
+axis convention.
+
+=== Local Coordinates
+
+Local coordinates place points in space relative to a named frame of
+reference, which is often referred to as a "frame" for brevity. All
+coordinates in a frame use a Front-Right-Down axis convention. Positions
+in a frame are expressed in 3D Cartesian coordinates (*x*, *y*, and *z*).
+Rotations in a frame are expressed as either a quaternion or a set of
+nautical angles (*roll*, *pitch*, and *yaw*). Nautical angles are
+evaluated as a sequence of rotations, where *yaw* is applied as a
+clockwise rotation around *z*, then *pitch* is applied as a clockwise
+rotation around the *y*, then *roll* is applied as a clockwise rotation
+around the *x*.
+
+.Local Coordinate System
+image::Plane.svg[Local Coordinate System,500,500]
+
+=== Geodetic Coordinates
+
+Geodetic coordinates place points in space relative to the Earth, also
+known as a geocentric reference frame (GCRF). A geodetic position is
+expressed in EPSG:4326 coordinates (*latitude*, *longitude*, and
+*altitude*). Altitude can be expressed as either Height-Above-Ellipsoid
+(HAE) or Above-Mean-Sea-Level (AMSL), where Mean Sea Level (MSL) is
+defined by EGM96. Rotations are expressed as either a quaternion or a
+set of nautical angles (*roll*, *pitch*, and *yaw*) with respect to the
+frame defined (at altitude) by the tangent plane to the Earth with the
+*x* axis pointing to geodetic true north (also known as a *topocentric*
+frame). By using such a reference frame, the rotation is defined in terms
+of North (*x*), East (*y*), and Down (*z*).
+
+.Geodetic Coordinate System
+image::NED.svg[Geodetic Coordinate System,500,500]
+
+=== Units of Measure
+
+Lengths (e.g., *x*, *y*, *z*, *AMSL*, and *HAE*) are always expressed in
+terms of meters. Angles (e.g., *latitude*, *longitude*, *roll*, *pitch*,
+and *yaw*) are always expressed in decimal degrees. Latitude is always
+expressed between -90° to 90°. Longitude is always expressed between
+-180° to 180°. Nautical angles are normally expressed within the
+principal domain (*roll* ∈ ±180°, *pitch* ∈ ±90°, *yaw* ∈ ±180°), but
+unnormalized (outside of the principal domain) nautical angles
+may be sent to the Pose Engine, but all replies will be normalized.
+
+=== Poses
+
+A *pose* is a position and a rotation in a frame using local
+coordinates. A *geopose* is a position and a rotation in the geodetic
+frame. In either case, the rotation gives the direction of the forward
+vector for the object. A *pose* in a frame can be converted to a
+*geopose* and vice-versa. A *pose* in a frame can be transformed to a
+*pose* in another frame. The concept of poses and geoposes are core to
+Pose Engine and computing spatial relationships.
+
+=== Frame Trees
+
+A *frame tree* is a a collection of frames whose relationships are
+defined by relating the pose of one frame to another. A *root frame* is
+a frame that is attached to the GCRF. Subsequent frames can be
+defined by asserting their pose from the root frame and each other. The
+relationships between those frames are rigid and any changes to the
+geopose of one infers a change to the geopose of the other frames
+associated with the root frame. In the case that such a rigid linkage is
+not desirable, multiple root frames can be created and position in
+geodetic space independently.
+
+== Pose Engine Interface
+
+Connections to the Pose Engine are made with gRPC. The default port for
+the Pose Engine is `8080`, however the port is configurable when
+running the `posed` script to launch the Pose Engine. The gRPC service
+definition can be downloaded: link:../proto/posed.proto[posed.proto].
+
+=== Common Data Types
+
+.Common gRPC Data Types
+[plantuml,plantuml-common-data-types,svg]
+--
+namespace posed {
+  class Cartesian {
+    +double x [meters]
+    +double y [meters]
+    +double z [meters]
+  }
+
+  class Spherical {
+    +double azimuth [degrees, -180° to 180°]
+    +double elevation [degrees, -90° to 90°]
+    +double radius [meters]
+  }
+
+  class NauticalAngles {
+    +double roll [degrees, -180° to 180°]
+    +double pitch [degrees, -90° to 90°]
+    +double yaw [degrees, -180° to 180°]
+  }
+
+  class Quaternion {
+    +double w [unitless, -1 to 1]
+    +double x [unitless, -1 to 1]
+    +double y [unitless, -1 to 1]
+    +double z [unitless, -1 to 1]
+  }
+
+  class GeodeticPositionReply {
+    +double latitude [degrees, -90° to 90°]
+    +double longitude [degrees, -180° to 180°]
+    +double amsl [meters]
+    +double hae [meters]
+  }
+
+  class GeodeticPoseReply {
+    +GeodeticPositionReply position
+    +NauticalAngles angles
+    +Quaternion quaternion
+  }
+
+  GeodeticPositionReply .. GeodeticPoseReply
+  NauticalAngles .. GeodeticPoseReply
+  Quaternion .. GeodeticPoseReply
+
+  class PoseRequest {
+    .. oneof position ..
+    +Cartesian cartesian
+    +Spherical spherical
+    .. oneof rotation ..
+    +NauticalAngles angles
+    +Quaternion quaternion
+  }
+
+  Cartesian .. PoseRequest
+  Spherical .. PoseRequest
+  NauticalAngles .. PoseRequest
+  Quaternion .. PoseRequest
+
+  class PoseReply {
+    +Cartesian cartesian
+    +Spherical spherical
+    +NauticalAngles angles
+    +Quaternion quaternion
+  }
+
+  Cartesian .. PoseReply
+  Spherical .. PoseReply
+  NauticalAngles .. PoseReply
+  Quaternion .. PoseReply
+
+  class Frame {
+    +String parent
+    +String frame
+    +PoseReply pose
+    +OneOf<GeodeticPoseReply> geopose
+  }
+
+  PoseReply .. Frame
+  GeodeticPoseReply .. Frame
+}
+--
+
+=== gRPC Methods
+
+The gRPC methods exposed by the Pose Engine provide a create, retrieve,
+update, and delete (CRUD) set of operations with various methods of
+retrieving information from the service, including streaming replies to
+allow event-driven responses to geospatial updates.
+
+==== CreateRoot
+
+.CreateRoot gRPC API
+[plantuml,plantuml-create-root,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} CreateRootReply CreateRoot(CreateRootRequest request)
+  }
+
+  class CreateRootRequest {
+    +String frame
+  }
+
+  class CreateRootReply {
+    +OneOf<GeodeticPoseReply> geopose
+  }
+
+  PosedService .. CreateRootRequest
+  PosedService .. CreateRootReply
+}
+--
+
+A root frame is created via the `CreateRoot` RPC method. The only
+argument to this method is the desired name of the frame. If the name
+is currently in use and it's not currently a root frame, then an error
+will occur. Internally, a root frame is created with an unknown
+relationship to the "GCRF" frame, a special frame name representing the
+geocentric reference frame. The "GCRF" name is therefore reserved.
+
+.Create Root Frame
+====
+[source]
+----
+CreateRoot({"frame": "INU"});
+----
+====
+
+==== Create
+
+.Create gRPC API
+[plantuml,plantuml-create,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} CreateReply Create(CreateRequest request)
+  }
+
+  class CreateRequest {
+    +String parent
+    +String frame
+    +PoseRequest pose
+  }
+
+  class CreateReply {
+    +OneOf<GeodeticPoseReply> geopose
+  }
+
+  PosedService .. CreateRequest
+  PosedService .. CreateReply
+}
+--
+
+A child frame is created via the `Create` RPC method. The arguments to
+this method will specify the desired name of the frame as well as the
+relationship to a parent frame by specifying a pose in the parent frame.
+If the child frame already exists and the parent frame is different,
+then an error will occur, otherwise the relationship to the parent will
+be updated.
+
+.Create Child Frames
+====
+[source]
+----
+Create({
+  "parent": "INU",
+  "frame": "PTZ",
+  "pose": {
+    "cartesian": {"x": 0, "y": 0, "z": 0.1},
+    "angles": {"roll": 0, "pitch": 0, "yaw": 90},
+  },
+});
+
+Create({
+  "parent": "INU",
+  "frame": "RADAR",
+  "pose": {
+    "cartesian": {"x": 0, "y": 1, "z": 0.1},
+    "angles": {"roll": 0, "pitch": 0, "yaw": 180},
+  },
+});
+----
+====
+
+==== Delete
+
+.Delete gRPC API
+[plantuml,plantuml-delete,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} DeleteReply Delete(DeleteRequest request)
+  }
+
+  class DeleteRequest {
+    +String frame
+    +bool recursive
+  }
+
+  class DeleteReply {
+    +uint64 removed
+  }
+
+  PosedService .. DeleteRequest
+  PosedService .. DeleteReply
+}
+--
+
+A frame can only be deleted (by name) if it is not a parent to any other
+frame. To overcome this limitation, the method allows requesting a
+recursive walk of all of the frames and including the given frame to
+delete an entire branch of the frame tree. As a special case, the
+"GCRF" frame cannot be deleted, however a recursive walk starting with
+the GCRF can be used to delete every user-created frame.
+
+.Delete All of the Frames
+====
+[source]
+----
+Delete({"frame": "GCRF", "recursive": true});
+----
+====
+
+==== Traverse
+
+.Traverse gRPC API
+[plantuml,plantuml-traverse,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} TraverseReply Traverse(TraverseRequest request)
+  }
+
+  class TraverseRequest {
+    +String frame
+  }
+
+  class TraverseReply {
+    +List<Frame> frames
+  }
+
+  PosedService .. TraverseRequest
+  PosedService .. TraverseReply
+}
+--
+
+For any frame in the frame tree, a query can be made to get the list of
+frames that are linked beneath and including the given frame. This
+method will return a list of frames. The given frame will be the first
+in the list while the rest of the entries will be the depth-first,
+pre-order traversal of the tree beneath the given frame. The values in
+the list will provide the complete state of the frame including the
+geopose, if available.
+
+.Traverse All of the Frames
+====
+[source]
+----
+Traverse({"frame": "GCRF"}).forEach(function(frame) {
+  log(frame);
+});
+----
+====
+
+==== Subgraph
+
+.Subgraph gRPC API
+[plantuml,plantuml-subgraph,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} SubgraphReply Subgraph(SubgraphRequest request)
+  }
+
+  class SubgraphRequest {
+    +String frame
+  }
+
+  class SubgraphReply {
+    +List<Frame> frames
+  }
+
+  PosedService .. SubgraphRequest
+  PosedService .. SubgraphReply
+}
+--
+
+For any frame in the frame tree, a query can be made to get the root
+frame for the given frame, then `Traverse` that root frame. The result
+of this method is a list of all of the rigidly linked together frames.
+The root frame for the given frame will be first in the list while the
+rest of the entries will be the depth-first, pre-order traversal of the
+tree beneath the root frame.
+
+.Find Root Frame for Child Frame
+====
+[source]
+----
+root = Subgraph({"frame" "INU"}).frames[0];
+----
+====
+
+==== Update
+
+.Update gRPC API
+[plantuml,plantuml-update,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} UpdateReply Update(UpdateRequest request)
+  }
+
+  class UpdateRequest {
+    +String frame
+    +GeodeticPoseRequest geopose
+  }
+
+  class UpdateReply {
+    +GeodeticPoseReply geopose
+  }
+
+  PosedService .. UpdateRequest
+  PosedService .. UpdateReply
+}
+--
+
+A frame can be placed into geodetic space by updating it's geopose. The
+action of updating the geodetic pose of a frame infers updates to all of
+the rigidly-linked frames in the subgraph.
+
+.Update the Position and North-Bearing for an INU
+====
+[source]
+----
+Update({
+  "frame": "INU",
+  "geopose": {
+    "position": {"latitude": inuLat, "longitude": inuLon, "amsl": inuAlt},
+    "angles": {"roll": 0, "pitch": 0, "yaw": inuCompass},
+  },
+});
+----
+====
+
+==== ConvertGeodetic
+
+.ConvertGeodetic gRPC API
+[plantuml,plantuml-convert-geodetic,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} ConvertLocalReply ConvertGeodetic(ConvertGeodeticRequest request)
+    +{static} Stream<ConvertLocalReply> ConvertGeodeticStream(ConvertGeodeticRequest request)
+  }
+
+  class ConvertGeodeticRequest {
+    +String frame
+    +GeodeticPoseRequest geopose
+  }
+
+  class ConvertLocalReply {
+    +OneOf<PoseReply> geopose
+  }
+
+  PosedService .. ConvertGeodeticRequest
+  PosedService .. ConvertLocalReply
+}
+--
+
+This method converts a geodetic pose into a named local frame. The
+reply message may or may not have an answer, because the Pose Engine
+may not have enough information to place the named frame into the
+geodetic coordinate system. The streaming variant provides continuous
+updates due to changes in Pose Engine.
+
+This method could be used to calculate the pointing angles for a
+Pan-Tilt-Zoom (PTZ) to point at a geodetic target, as in
+<<pointPtzAtGeo>>. If non-zero angles were provided, then the method
+could be used to determine the trajectory of a target with respect to
+the PTZ.
+
+[#pointPtzAtGeo]
+.Pointing a PTZ at a Geodetic Target
+[source]
+----
+reply = ConvertGeodetic({
+  "frame": "PTZ",
+  "geopose": {
+    "position": {"latitude": tgtLat, "longitude": tgtLon, "hae": tgtHae},
+    "angles": {"roll": 0, "pitch": 0, "yaw": 0}, // Don't care
+  },
+});
+if (reply.pose) {
+  pointPtz({
+    "pan":  reply.pose.spherical.azimuth,
+    "tilt": reply.pose.spherical.elevation,
+    "zoom": reply.pose.spherical.radius,
+  });
+}
+----
+
+==== ConvertLocal
+
+.ConvertLocal gRPC API
+[plantuml,plantuml-convert-local,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} ConvertGeodeticReply ConvertLocal(ConvertLocalRequest request)
+    +{static} Stream<ConvertGeodeticReply> ConvertLocalStream(ConvertLocalRequest request)
+  }
+
+  class ConvertLocalRequest {
+    +String frame
+    +PoseRequest pose
+  }
+
+  class ConvertGeodeticReply {
+    +OneOf<PoseReply> pose
+  }
+
+  PosedService .. ConvertLocalRequest
+  PosedService .. ConvertGeodeticReply
+}
+--
+
+This method converts a pose in a named local frame to a geodetic pose.
+The reply message may or may not have an answer, because the Pose
+Service may not have enough information to place the named frame into
+the geodetic coordinate system. The streaming variant provides continuous
+updates due to changes in Pose Engine.
+
+This method could be used to calculate the geodetic position of the target
+of a Pan-Tilt-Zoom (PTZ), as in <<georectifyPtz>>. If non-zero angles were
+provided, then method would also determine the forward direction of the
+target with respect to it's North-East-Down (NED) plane.
+
+[#georectifyPtz]
+.Georectifying the Target of a PTZ
+====
+[source]
+----
+reply = ConvertLocal({
+  "frame": "PTZ",
+  "pose": {
+    "spherical": {
+      "azimuth": ptzPan,
+      "elevation": ptzTilt,
+      "radius": ptzZoom,
+    },
+    "angles": {"roll": 0, "pitch": 0, "yaw": 0}, // Don't care
+  },
+});
+if (reply.geopose) {
+  reportGeo({
+    "latitude":  reply.geopose.position.latitude,
+    "longitude": reply.geopose.position.longitude,
+    "altitude":  reply.geopose.position.amsl,
+  });
+}
+----
+====
+
+==== Transform
+
+.Transform gRPC API
+[plantuml,plantuml-transform,svg]
+--
+namespace posed {
+  interface PosedService {
+    +{static} TransformReply Transform(TransformRequest request)
+    +{static} Stream<TransformReply> TransformStream(TransformRequest request)
+  }
+
+  class TransformRequest {
+    +String srcFrame
+    +String dstFrame
+    +PoseRequest pose
+  }
+
+  class TransformReply {
+    +OneOf<PoseReply> pose
+  }
+
+  PosedService .. TransformRequest
+  PosedService .. TransformReply
+}
+--
+
+This method converts a pose in a named local frame to a pose into another
+named local frame. If the two named local frames are a member of the same
+subgraph, then the reply will be calculated without using the geodetic
+positions of the frames and will always be available. If the two frames
+are not members of the same subgraph, then geodetic relationship of the
+two root frames will be necessary to calculate the reply, which may not
+be available and will give an absent reply. The streaming variant provides
+continuous updates due to changes in Pose Engine.
+
+This method could be used to calculate the pointing angles for a
+Pan-Tilt-Zoom (PTZ) to point at a target returned by a radar, as in
+<<pointPtzAtRadar>>. If non-zero angles were provided, then the method
+could be used to determine the trajectory of a target with respect to
+the PTZ. If the PTZ and radar are mounted together (and therefore share
+a subgraph), then solutions are solved independent of the geodetic pose
+of either sensor -- allowing operation without a
+Global Positioning System (GPS) device.
+
+[#pointPtzAtRadar]
+.Pointing a PTZ at a Radar Target
+====
+[source]
+----
+reply = Transform({
+  "srcFrame": "RADAR",
+  "dstFrame": "PTZ",
+  "pose": {
+    "spherical": {
+      "azimuth": tgtAzFromRadar,
+      "elevation": tgtElFromRadar,
+      "radius": tgtRangeFromRadar,
+    },
+    "angles": {"roll": 0, "pitch": 0, "yaw": 0}, // Don't care
+  },
+});
+if (reply.pose) {
+  pointPtz({
+    "pan":  reply.pose.spherical.azimuth,
+    "tilt": reply.pose.spherical.elevation,
+    "zoom": reply.pose.spherical.radius,
+  });
+}
+----
+====

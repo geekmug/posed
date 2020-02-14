@@ -301,6 +301,20 @@ project(':posed-czml') {
 }
 
 project(':posed-web') {
+  def generatedResourcesDir = "${buildDir}/generated/resources"
+
+  sourceSets {
+    generated {
+      resources.srcDir generatedResourcesDir
+    }
+  }
+  jar {
+    from sourceSets.generated.output
+  }
+  sourcesJar.from {
+    sourceSets.generated.allSource
+  }
+
   dependencies {
     compile project(':posed-core')
     compile project(':posed-czml')
@@ -328,8 +342,35 @@ project(':posed-web') {
     runtime group: 'org.glassfish.jaxb', name: 'jaxb-runtime'
   }
 
+  licenseGenerated.exclude "/static/doc/index.html"
+
   licenseMain.exclude "/static/Cesium/**"
   licenseMain.exclude "/static/CesiumViewer/viewerCesiumNavigationMixin.js"
+
+  task copyProtoFiles {
+    project(':posed-grpc').sourceSets.grpc.proto.srcDirs.each {
+      inputs.dir it
+    }
+    outputs.dir "${generatedResourcesDir}/static/proto"
+    doLast {
+      mkdir file("${generatedResourcesDir}/static/proto")
+      copy {
+        from project(':posed-grpc').sourceSets.grpc.proto.srcDirs
+        into file("${generatedResourcesDir}/static/proto")
+      }
+    }
+  }
+
+  task copyAsciidocFiles(type: Copy, dependsOn: rootProject.asciidoctor) {
+    into("${generatedResourcesDir}/static/doc")
+    from("${rootProject.buildDir}/asciidoc/html5") {
+      exclude '.asciidoctor'
+    }
+  }
+
+  task generateResources(dependsOn: [copyProtoFiles, copyAsciidocFiles]) {}
+  processGeneratedResources.dependsOn generateResources
+  sourcesJar.dependsOn generateResources
 }
 
 distributions {
