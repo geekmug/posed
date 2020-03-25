@@ -41,11 +41,17 @@
             requestRenderMode: true,
             scene3DOnly: true,
             shadows: false,
-            terrainProvider: Cesium.createWorldTerrain(),
+            terrainProvider: Cesium.EllipsoidTerrainProvider(),
             timeline: false,
         });
         viewer.scene.skyBox.destroy();
         viewer.scene.skyBox = null;
+
+        // Try to get terrain data, then switch the globe to use it.
+        var worldTerrain = Cesium.createWorldTerrain();
+        worldTerrain.readyPromise.then(function() {
+            viewer.terrainProvider = worldTerrain;
+        });
 
         var imagery = viewer.scene.imageryLayers;
         imagery.addImageryProvider(new Cesium.SingleTileImageryProvider({
