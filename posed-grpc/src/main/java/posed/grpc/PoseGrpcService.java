@@ -264,7 +264,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     @Override
-    public final void convertGeodeticToLocal(ConvertGeodeticRequest request,
+    public final void convertGeodetic(ConvertGeodeticRequest request,
             StreamObserver<ConvertLocalReply> responseObserver) {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
@@ -283,7 +283,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     @Override
-    public final void convertGeodeticToLocalStream(ConvertGeodeticRequest request,
+    public final void convertGeodeticStream(ConvertGeodeticRequest request,
             StreamObserver<ConvertLocalReply> responseObserver) {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
@@ -308,7 +308,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     @Override
-    public final void convertLocalToGeodetic(ConvertLocalRequest request,
+    public final void convertLocal(ConvertLocalRequest request,
             StreamObserver<ConvertGeodeticReply> responseObserver) {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
@@ -327,7 +327,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     @Override
-    public final void convertLocalToGeodeticStream(ConvertLocalRequest request,
+    public final void convertLocalStream(ConvertLocalRequest request,
             StreamObserver<ConvertGeodeticReply> responseObserver) {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");

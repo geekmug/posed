@@ -41,11 +41,11 @@ service PoseService {
   rpc Update (UpdateRequest) returns (UpdateReply) {}
 
   // Gets a pose in a frame given a geodetic pose.
-  rpc ConvertGeodeticToLocal (ConvertGeodeticRequest) returns (ConvertLocalReply) {}
-  rpc ConvertGeodeticToLocalStream (ConvertGeodeticRequest) returns (stream ConvertLocalReply) {}
+  rpc ConvertGeodetic (ConvertGeodeticRequest) returns (ConvertLocalReply) {}
+  rpc ConvertGeodeticStream (ConvertGeodeticRequest) returns (stream ConvertLocalReply) {}
   // Gets a geodetic pose for a pose in a given frame.
-  rpc ConvertLocalToGeodetic (ConvertLocalRequest) returns (ConvertGeodeticReply) {}
-  rpc ConvertLocalToGeodeticStream (ConvertLocalRequest) returns (stream ConvertGeodeticReply) {}
+  rpc ConvertLocal (ConvertLocalRequest) returns (ConvertGeodeticReply) {}
+  rpc ConvertLocalStream (ConvertLocalRequest) returns (stream ConvertGeodeticReply) {}
 
   // Gets the apparent pose in a destination frame for a source frame and pose.
   rpc Transform (TransformRequest) returns (TransformReply) {}
