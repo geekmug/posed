@@ -290,7 +290,11 @@ public class PoseService {
             return Optional.absent();
         }
 
-        return Optional.of(Frames.transform(srcFrame, dstFrame, pose));
+        try {
+            return Optional.of(Frames.transform(srcFrame, dstFrame, pose));
+        } catch (UnknownTransformException e) {
+            return Optional.absent();
+        }
     }
 
     private Flux<Boolean> getOrMakeUpdateProcessor(String name) {

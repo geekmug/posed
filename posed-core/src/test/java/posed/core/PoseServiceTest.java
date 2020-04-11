@@ -296,6 +296,13 @@ public class PoseServiceTest {
     }
 
     @Test
+    public void testTransformNoGeodetics() {
+        poseService.createRoot("root2");
+        assertThat(poseService.transform("below", "root2", Pose.IDENTITY).isPresent(),
+                is(equalTo(false)));
+    }
+
+    @Test
     public void testTransformStream() {
         StepVerifier.withVirtualTime(
                 () -> poseService.transformStream("front", "below", Pose.IDENTITY))

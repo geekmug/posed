@@ -219,5 +219,7 @@ message TransformRequest {
 }
 
 message TransformReply {
-  PoseReply pose = 3;
+  oneof value {
+    PoseReply pose = 1;
+  }
 }
