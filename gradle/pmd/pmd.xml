@@ -65,7 +65,7 @@ Exceptions thrown from main methods are have an undefined behavior.
     <properties>
       <property name="xpath">
         <value><![CDATA[
-          //MethodDeclaration[@Public='true' and @Static='true' and MethodDeclarator[@Image='main']]//NameList
+          //MethodDeclaration[@Public='true' and @Static='true' and MethodDeclarator[@Name='main']]//NameList
         ]]></value>
       </property>
     </properties>

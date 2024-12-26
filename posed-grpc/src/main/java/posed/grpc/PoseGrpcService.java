@@ -290,7 +290,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
 
             poseService.convertStream(
                     request.getFrame(), PosedProtos.decode(geoid, request.getGeopose()))
-            .subscribeOn(Schedulers.elastic())
+            .subscribeOn(Schedulers.boundedElastic())
             .subscribe(pose -> {
                 ConvertLocalReply.Builder builder = ConvertLocalReply.newBuilder();
                 if (pose.isPresent()) {
@@ -334,7 +334,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
 
             poseService.convertStream(
                     request.getFrame(), PosedProtos.decode(request.getPose()))
-            .subscribeOn(Schedulers.elastic())
+            .subscribeOn(Schedulers.boundedElastic())
             .subscribe(pose -> {
                 ConvertGeodeticReply.Builder builder = ConvertGeodeticReply.newBuilder();
                 if (pose.isPresent()) {
@@ -383,7 +383,7 @@ public class PoseGrpcService extends PoseServiceImplBase {
             poseService.transformStream(
                     request.getSrcFrame(), request.getDstFrame(),
                     PosedProtos.decode(request.getPose()))
-            .subscribeOn(Schedulers.elastic())
+            .subscribeOn(Schedulers.boundedElastic())
             .subscribe(pose -> {
                 TransformReply.Builder builder = TransformReply.newBuilder();
                 if (pose.isPresent()) {

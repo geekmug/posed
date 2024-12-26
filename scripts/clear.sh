@@ -1,3 +1,3 @@
 #!/bin/bash
-
-echo '{"frame": "GCRF", "recursive": true}' | evans -r -p 8080 cli --call Delete | jq -c
+PORT=${1:-8080}
+echo '{"frame": "GCRF", "recursive": true}' | evans -r -p ${PORT} cli call Delete | jq -c

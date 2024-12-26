@@ -40,7 +40,7 @@ import posed.core.frametree.ChangeTrackingFrameTree.Change;
 import posed.core.frametree.CopyOnWriteFrameTree;
 import posed.core.frametree.FrameTree;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.ReplayProcessor;
+import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
 /** Service instance for managing poses. */
@@ -79,7 +79,7 @@ public class PoseService {
         });
     }
 
-    private final ConcurrentHashMap<String, ReplayProcessor<Boolean>> updateProcessors =
+    private final ConcurrentHashMap<String, Sinks.Many<Boolean>> updateSinks =
             new ConcurrentHashMap<>();
     private final ReferenceEllipsoid referenceEllipsoid;
     private final Frame bodyFrame;
@@ -101,15 +101,15 @@ public class PoseService {
     private void handleChangeStream(Change change) {
         if (change instanceof ChangeTrackingFrameTree.Created) {
             Frame frame = ((ChangeTrackingFrameTree.Created) change).getFrame();
-            ReplayProcessor<Boolean> processor = updateProcessors.get(frame.getName());
-            if (processor != null) {
-                processor.onNext(Boolean.TRUE);
+            Sinks.Many<Boolean> sink = updateSinks.get(frame.getName());
+            if (sink != null) {
+                sink.tryEmitNext(Boolean.TRUE);
             }
         } else {
             String name = ((ChangeTrackingFrameTree.Removed) change).getName();
-            ReplayProcessor<Boolean> processor = updateProcessors.get(name);
-            if (processor != null) {
-                processor.onComplete();
+            Sinks.Many<Boolean> sink = updateSinks.get(name);
+            if (sink != null) {
+                sink.tryEmitComplete();
             }
         }
     }
@@ -298,8 +298,9 @@ public class PoseService {
     }
 
     private Flux<Boolean> getOrMakeUpdateProcessor(String name) {
-        return updateProcessors.computeIfAbsent(name,
-                frameName -> ReplayProcessor.cacheLast())
+        return updateSinks.computeIfAbsent(name,
+                frameName -> Sinks.many().replay().latest())
+                .asFlux()
                 .subscribeOn(Schedulers.boundedElastic())
                 .hide();
     }

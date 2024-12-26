@@ -43,6 +43,9 @@ limitations under the License.
   <!-- Checks for Size Violations. -->
   <!-- See http://checkstyle.sf.net/config_sizes.html -->
   <module name="FileLength" />
+  <module name="LineLength">
+    <property name="max" value="120" />
+  </module>
 
   <!-- Checks for whitespace -->
   <!-- See http://checkstyle.sf.net/config_whitespace.html -->
@@ -113,10 +116,8 @@ limitations under the License.
 
     <!-- Checks for Javadoc comments. -->
     <!-- See http://checkstyle.sf.net/config_javadoc.html -->
-    <module name="JavadocMethod">
+    <module name="MissingJavadocMethodCheck">
       <property name="scope" value="protected" />
-      <property name="allowUndeclaredRTE" value="true" />
-      <property name="allowThrowsTagsForSubclasses" value="true" />
       <property name="allowMissingPropertyJavadoc" value="true" />
     </module>
     <module name="JavadocType">
@@ -148,7 +149,6 @@ limitations under the License.
     <module name="ParameterName" />
     <module name="StaticVariableName" />
     <module name="TypeName" />
-    <module name="com.github.sevntu.checkstyle.checks.naming.EnumValueNameCheck" />
 
     <!-- Checks for imports -->
     <!-- See http://checkstyle.sf.net/config_import.html -->
@@ -163,9 +163,6 @@ limitations under the License.
 
     <!-- Checks for Size Violations. -->
     <!-- See http://checkstyle.sf.net/config_sizes.html -->
-    <module name="LineLength">
-      <property name="max" value="120" />
-    </module>
     <module name="MethodLength" />
     <module name="ParameterNumber" />
 
@@ -226,7 +223,6 @@ limitations under the License.
     <module name="SimplifyBooleanExpression" />
     <module name="SimplifyBooleanReturn" />
     <module name="StringLiteralEquality" />
-    <module name="com.github.sevntu.checkstyle.checks.design.ConstructorWithoutParamsCheck" />
 
 
     <!-- Checks for class design -->
@@ -234,7 +230,6 @@ limitations under the License.
     <module name="DesignForExtension" />
     <module name="ExplicitInitialization" />
     <module name="FinalClass" />
-    <module name="io.spring.javaformat.checkstyle.check.SpringHideUtilityClassConstructor" />
     <module name="VisibilityModifier" />
     <module name="RegexpSinglelineJava">
       <property name="format"

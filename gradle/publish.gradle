@@ -34,13 +34,6 @@ allprojects {
 
   publishing {
     repositories {
-      maven {
-        credentials {
-          username = "${artifactory_user}"
-          password = "${artifactory_password}"
-        }
-        url "${artifactory_contextUrl}/" + (version.contains("SNAPSHOT") ? 'libs-snapshot-local' : 'libs-release-local')
-      }
     }
   }
 

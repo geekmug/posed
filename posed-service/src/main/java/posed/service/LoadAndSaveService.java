@@ -21,6 +21,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -43,12 +44,11 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.scheduling.support.CronSequenceGenerator;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
-import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -82,7 +82,7 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         this.poseService = checkNotNull(poseService);
         this.filename = Paths.get(filename);
         workFilename = Paths.get(filename + "~");
-        autosave = CronSequenceGenerator.isValidExpression(cron);
+        autosave = CronExpression.isValidExpression(cron);
     }
 
     @Override
@@ -227,7 +227,7 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         Map<String, Object> roots = null;
 
         Yaml yaml = new Yaml();
-        try (Reader reader = Files.newBufferedReader(filename, Charsets.UTF_8)) {
+        try (Reader reader = Files.newBufferedReader(filename, StandardCharsets.UTF_8)) {
             roots = yaml.loadAs(reader, Map.class);
         } catch (IOException e) {
             LOG.warn("failed to load save file", e);
@@ -300,7 +300,7 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         Yaml yaml = new Yaml(options);
 
         // Write the data to a working file.
-        try (Writer writer = Files.newBufferedWriter(workFilename, Charsets.UTF_8)) {
+        try (Writer writer = Files.newBufferedWriter(workFilename, StandardCharsets.UTF_8)) {
             yaml.dump(roots, writer);
         } catch (IOException e) {
             LOG.warn("failed to write save file", e);

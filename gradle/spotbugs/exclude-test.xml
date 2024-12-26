@@ -15,6 +15,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <FindBugsFilter>
+  <!-- The expose internal representation check is false-positive prone. -->
+  <Match>
+    <Or>
+      <Bug pattern="EI_EXPOSE_REP" />
+      <Bug pattern="EI_EXPOSE_REP2" />
+    </Or>
+  </Match>
+
   <!-- Providing empty methods is a valid method for designing for
        extension. Non-final classes are allowed to have empty methods, so
        there is no good justification to disallow this on abstracts. -->

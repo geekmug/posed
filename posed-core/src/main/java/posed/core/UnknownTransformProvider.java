@@ -16,7 +16,7 @@
 
 package posed.core;
 
-import org.hipparchus.RealFieldElement;
+import org.hipparchus.CalculusFieldElement;
 import org.orekit.frames.FieldTransform;
 import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
@@ -38,7 +38,7 @@ public final class UnknownTransformProvider implements TransformProvider {
     }
 
     @Override
-    public <T extends RealFieldElement<T>> FieldTransform<T> getTransform(
+    public <T extends CalculusFieldElement<T>> FieldTransform<T> getTransform(
             FieldAbsoluteDate<T> date) {
         throw UnknownTransformException.INSTANCE;
     }

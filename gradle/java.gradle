@@ -1,0 +1,189 @@
+/*
+ * Copyright (C) 2016, Scott Dial, All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+allprojects {
+  apply plugin: 'java'
+  apply plugin: 'maven-publish'
+  apply plugin: 'com.adarshr.test-logger'
+
+  // Instruct Eclipse projects to download both sources and javadoc
+  apply plugin: 'eclipse'
+  eclipse {
+    classpath {
+      downloadSources = true
+      downloadJavadoc = true
+    }
+  }
+
+  // Instruct IDEA projects to download both sources and javadoc
+  apply plugin: 'idea'
+  idea {
+    module {
+      downloadSources = true
+      downloadJavadoc = true
+    }
+  }
+
+  // Check the dependencies on all of our Java projects.
+  apply plugin: 'ca.cutterslade.analyze'
+
+  // Restore status after Java plugin
+  status = rootProject.status
+
+  // Specify the Java version on all of our Java projects.
+  java {
+    toolchain {
+      languageVersion = JavaLanguageVersion.of(javaVersion)
+    }
+  }
+
+  if (JavaVersion.current().isJava9Compatible()) {
+    tasks.withType(JavaCompile) {
+      // Specify Java release for newer Java compilers.
+      options.release = javaVersion.getMajorVersion() as int
+      // Specify Java language level to use to compile the source files.
+      sourceCompatibility = javaVersion
+      // Specify target JVM for the class files.
+      targetCompatibility = javaVersion
+    }
+  }
+
+  tasks.withType(JavaCompile) {
+    // Specify that all of our sources are UTF-8 encoded.
+    options.encoding = "UTF-8"
+    // Specify that we want to retain parameter names in class files.
+    options.compilerArgs << "-parameters"
+        // Specify that we want to lint everything and error on warnings.
+    options.compilerArgs << "-Xlint:all" << "-Werror"
+  }
+
+  // Define a sources jar for publishing.
+  task sourcesJar(type: Jar, dependsOn: classes) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+  }
+  publish {
+    dependsOn sourcesJar
+  }
+
+  // Define a javadoc jar for publishing.
+  task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+  }
+  publish {
+    dependsOn javadocJar
+  }
+
+  /* Create a "test" configuration and artifact for every project to
+   * allow sharing of test code between subprojects via dependencies:
+   *
+   * dependencies {
+   *   testCompile project(path: ':a-project', configuration: 'test')
+   * }
+   */
+  configurations.create('test').extendsFrom(configurations.testRuntimeClasspath)
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+  artifacts {
+    test testJar
+  }
+
+  javadoc {
+    options.showAll()
+    options.encoding('UTF-8')
+    options.charSet('UTF-8')
+    options.setUse(true)
+    options.author(true)
+    options.version(true)
+    options.windowTitle(group + ':' + project.name + ':' + version)
+    options.docTitle(group + ':' + project.name + ':' + version)
+    options.footer(copyrightString)
+    doFirst {
+      javadoc.title = group + ':' + project.name + ':' + version
+      javadoc.options.docTitle = javadoc.title
+    }
+  }
+
+  // Disable super-strict doclint tool in Java 8
+  if (JavaVersion.current().isJava8Compatible()) {
+    tasks.withType(Javadoc) {
+      options.addStringOption('Xdoclint:none', '-quiet')
+    }
+  }
+
+  // Enable the errorprone plugin for static analysis.
+  apply plugin: 'net.ltgt.errorprone'
+  dependencies {
+    errorprone group: 'com.google.errorprone', name: 'error_prone_core', version: errorproneVersion
+    errorproneJavac group: 'com.google.errorprone', name: 'javac', version: errorproneJavacVersion
+  }
+  tasks.withType(JavaCompile).configureEach {
+    options.errorprone {
+      disable("UnusedVariable")
+    }
+  }
+
+  // Enable various code quality checkers.
+  apply plugin: 'ru.vyarus.quality'
+  quality {
+    configDir = rootProject.file('gradle')
+
+    checkstyleVersion = property('checkstyleVersion')
+    pmdVersion = property('pmdVersion')
+    spotbugsVersion = property('spotbugsVersion')
+  }
+  afterEvaluate {
+    project.tasks.each { task ->
+      if (task.getClass().getName().startsWith('org.gradle.api.plugins.quality.Checkstyle')) {
+        checkstyle {
+          configProperties = [
+            'checkstyle.importcontrol.file': rootProject.file('gradle/checkstyle/import-control.xml'),
+            'checkstyle.suppressions.file': rootProject.file('gradle/checkstyle/suppressions.xml'),
+          ]
+        }
+      } else if (task.getClass().getName().startsWith('com.github.spotbugs.snom.SpotBugsTask')) {
+        // Set the task's excludeFilter based on its name
+        if (task.name == 'spotbugsTest') {
+          task.excludeFilter = rootProject.file('gradle/spotbugs/exclude-test.xml')
+        } else {
+          task.excludeFilter = rootProject.file('gradle/spotbugs/exclude-main.xml')
+        }
+      }
+    }
+  }
+  task checkQuality {}
+  project.sourceSets.each { set -> checkQuality.dependsOn(set.getTaskName('checkQuality', null)) }
+  project.check.dependsOn(project.checkQuality)
+  project.test.mustRunAfter(project.checkQuality)
+
+  // Enable JaCoCo to gather code coverage.
+  apply plugin: 'jacoco'
+  jacoco {
+    toolVersion = jacocoVersion
+  }
+  jacocoTestReport {
+    reports {
+      csv.enabled = false
+      xml.enabled = false
+      html.destination = file("${buildDir}/jacocoHtml")
+    }
+  }
+  jacocoTestReport.dependsOn(project.test)
+  build.dependsOn(jacocoTestReport)
+}

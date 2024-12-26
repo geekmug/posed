@@ -16,50 +16,36 @@
 
 buildscript {
   repositories {
-    // Use
-    maven {
-      url "${artifactory_contextUrl}/plugins-release"
-      credentials {
-        username = "${artifactory_user}"
-        password = "${artifactory_password}"
-      }
-    }
-    // Use public repositories if the private artifactory is unavailable.
     gradlePluginPortal()
-    jcenter()
+    mavenCentral()
+    mavenLocal()
   }
-
+  dependencyLocking {
+    lockMode = LockMode.STRICT
+    lockAllConfigurations()
+  }
   dependencies {
     classpath group: 'ca.cutterslade.gradle', name: 'gradle-dependency-analyze', version: gradleDependencyAnalyzeVersion
-    classpath group: 'de.aaschmid', name: 'gradle-cpd-plugin', version: gradleCpdPluginVersion
-    classpath group: 'gradle.plugin.com.github.spotbugs', name: 'spotbugs-gradle-plugin', version: spotbugsGradlePluginVersion
-    classpath group: 'gradle.plugin.nl.javadude.gradle.plugins', name: 'license-gradle-plugin', version: licenseGradlePluginVersion
-    classpath group: 'net.ltgt.gradle', name: 'gradle-errorprone-plugin', version: errorpronePluginVersion
-    classpath group: 'org.asciidoctor', name: 'asciidoctor-gradle-plugin', version: asciidoctorGradlePluginVersion
-    classpath group: 'pl.allegro.tech.build', name: 'axion-release-plugin', version: axionReleasePluginVersion
-
-    classpath group: 'com.google.guava', name: 'guava', version: guavaVersion
+    classpath group: 'com.adarshr', name: 'gradle-test-logger-plugin', version: gradleTestLoggerPluginVersion
+    classpath group: 'com.benjaminsproule.license', name: 'com.benjaminsproule.license.gradle.plugin', version: licenseGradlePluginVersion
     classpath group: 'com.google.protobuf', name: 'protobuf-gradle-plugin', version: protobufGradlePluginVersion
     classpath group: 'io.spring.gradle', name: 'dependency-management-plugin', version: springDependencyManagementPluginVersion
+    classpath group: 'net.ltgt.gradle', name: 'gradle-errorprone-plugin', version: errorpronePluginVersion
+    classpath group: 'org.asciidoctor.jvm.convert', name: 'org.asciidoctor.jvm.convert.gradle.plugin', version: asciidoctorGradlePluginVersion
     classpath group: 'org.jsonschema2pojo', name: 'jsonschema2pojo-gradle-plugin', version: js2pPluginVersion
+    classpath group: 'org.springframework.boot', name: 'spring-boot-gradle-plugin', version: springBootVersion
+    classpath group: 'pl.allegro.tech.build', name: 'axion-release-plugin', version: axionReleasePluginVersion
+    classpath group: 'ru.vyarus', name: 'gradle-quality-plugin', version: gradleQualityPluginVersion
   }
-}
-
-ext {
-    // Make this extended task type available to all of the other gradle scripts
-    SpotBugsTask = com.github.spotbugs.SpotBugsTask
 }
 
 apply from: file('gradle/base.gradle')
 
 apply from: file('gradle/asciidoc.gradle')
-apply from: file('gradle/check.gradle')
-apply from: file('gradle/convention.gradle')
-apply from: file('gradle/javadoc.gradle')
+apply from: file('gradle/java.gradle')
 apply from: file('gradle/license.gradle')
 apply from: file('gradle/publish.gradle')
 apply from: file('gradle/repository.gradle')
-apply from: file('gradle/scripts.gradle')
 
 allprojects {
   apply plugin: 'io.spring.dependency-management'
@@ -67,11 +53,10 @@ allprojects {
   // Ensure that our transitive dependencies are sane.
   dependencyManagement {
     imports {
-      mavenBom "org.glassfish.jaxb:jaxb-bom:${jaxbVersion}"
-      mavenBom "org.hipparchus:hipparchus:${hipparchusVersion}"
       mavenBom "io.grpc:grpc-bom:${grpcVersion}"
       mavenBom "com.linecorp.armeria:armeria-bom:${armeriaVersion}"
-      mavenBom "io.netty:netty-bom:${nettyVersion}"
+      mavenBom "org.glassfish.jaxb:jaxb-bom:${jaxbVersion}"
+      mavenBom "org.hipparchus:hipparchus:${hipparchusVersion}"
       mavenBom "org.springframework:spring-framework-bom:${springVersion}"
       mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
     }
@@ -82,128 +67,100 @@ allprojects {
       dependency group: 'com.google.guava', name: 'guava', version: guavaVersion
       dependency group: 'com.google.protobuf', name: 'protoc', version: protocVersion
       dependency group: 'io.spring.javaformat', name: 'spring-javaformat-checkstyle', version: springJavaformatCheckstyleVersion
-      dependency group: 'net.devh', name: 'grpc-server-spring-boot-autoconfigure', version: springBootGrpcVersion
-      dependency group: 'net.devh', name: 'grpc-server-spring-boot-starter', version: springBootGrpcVersion
       dependency group: 'org.jvnet.ogc', name: 'kml-v_2_2_0', version: kmlVersion
       dependency group: 'org.orekit', name: 'orekit', version: orekitVersion
     }
   }
 
-  if (configurations.findByName('spotbugs')) {
-    // Spotbugs relies on a beta version of slf4j, so we need to override the BOM
-    dependencyManagement {
-      configurations(spotbugs) {
-        imports {
-          mavenBom "org.slf4j:slf4j-parent:${spotbugsSlf4jVersion}"
+  afterEvaluate {
+    if (configurations.findByName('spotbugs')) {
+      // Spotbugs relies on a newer version of slf4j, so we need to override the BOM
+      dependencyManagement {
+        configurations(spotbugs) {
+          imports {
+            mavenBom "org.slf4j:slf4j-parent:${spotbugsSlf4jVersion}"
+          }
         }
       }
     }
-  }
 
-  if (configurations.findByName('checkstyle')) {
-    dependencies {
-      checkstyle group: 'io.spring.javaformat', name: 'spring-javaformat-checkstyle'
+    if (configurations.findByName('checkstyle')) {
+      dependencies {
+        checkstyle group: 'io.spring.javaformat', name: 'spring-javaformat-checkstyle'
+      }
     }
   }
 }
 
 project(':posed-core') {
   dependencies {
-    compile group: 'com.github.spotbugs', name: 'spotbugs-annotations'
-    compile group: 'com.google.code.findbugs', name: 'jsr305'
-    compile group: 'com.google.guava', name: 'guava'
-    compile group: 'io.projectreactor', name: 'reactor-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
-    compile group: 'org.orekit', name: 'orekit'
-    compile group: 'org.reactivestreams', name: 'reactive-streams'
-    compile group: 'org.springframework', name: 'spring-beans'
-    compile group: 'org.springframework', name: 'spring-context'
+    implementation group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+    implementation group: 'com.google.code.findbugs', name: 'jsr305'
+    implementation group: 'com.google.guava', name: 'guava'
+    implementation group: 'io.projectreactor', name: 'reactor-core'
+    implementation group: 'org.hipparchus', name: 'hipparchus-core'
+    implementation group: 'org.hipparchus', name: 'hipparchus-geometry'
+    implementation group: 'org.orekit', name: 'orekit'
+    implementation group: 'org.reactivestreams', name: 'reactive-streams'
+    implementation group: 'org.springframework', name: 'spring-beans'
+    implementation group: 'org.springframework', name: 'spring-context'
 
-    testCompile group: 'io.projectreactor', name: 'reactor-test'
-    testCompile group: 'junit', name: 'junit'
-    testCompile group: 'org.hamcrest', name: 'hamcrest'
-    testCompile group: 'org.reactivestreams', name: 'reactive-streams'
-    testCompile group: 'org.springframework', name: 'spring-core'
-    testCompile group: 'org.springframework', name: 'spring-beans'
-    testCompile group: 'org.springframework', name: 'spring-test'
+    permitUnusedDeclared group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+
+    testImplementation group: 'io.projectreactor', name: 'reactor-test'
+    testImplementation group: 'junit', name: 'junit'
+    testImplementation group: 'org.hamcrest', name: 'hamcrest'
+    testImplementation group: 'org.reactivestreams', name: 'reactive-streams'
+    testImplementation group: 'org.springframework', name: 'spring-core'
+    testImplementation group: 'org.springframework', name: 'spring-beans'
+    testImplementation group: 'org.springframework', name: 'spring-test'
+
+    permitTestUnusedDeclared group: 'com.github.spotbugs', name: 'spotbugs-annotations'
   }
 }
 
 project(':posed-grpc') {
-  apply plugin: 'com.google.protobuf'
-
-  def grpcGeneratedDir = "${buildDir}/grpc"
-
-  sourceSets {
-    grpc {
-      java.srcDirs += "${buildDir}/grpc/grpc/grpc"
-      java.srcDirs += "${buildDir}/grpc/grpc/java"
-    }
-    main {
-      compileClasspath += grpc.compileClasspath + grpc.output
-      runtimeClasspath += grpc.runtimeClasspath + grpc.output
-    }
-    test {
-      compileClasspath += grpc.compileClasspath + grpc.output
-      runtimeClasspath += grpc.runtimeClasspath + grpc.output
-    }
-  }
-  jar {
-    from sourceSets.grpc.output
-  }
-  javadoc.classpath += sourceSets.grpc.output
-  sourcesJar.from {
-    "${buildDir}/grpc/grpc/grpc"
-    "${buildDir}/grpc/grpc/java"
-  }
-  configurations {
-    permitGrpcUnusedDeclared
-  }
-
   dependencies {
-    grpcCompile group: 'com.google.guava', name: 'guava'
-    grpcCompile group: 'com.google.protobuf', name: 'protobuf-java'
-    grpcCompile group: 'io.grpc', name: 'grpc-api'
-    grpcCompile group: 'io.grpc', name: 'grpc-protobuf'
-    grpcCompile group: 'io.grpc', name: 'grpc-stub'
+    implementation project(':posed-core')
+    implementation project(':posed-protos')
+    implementation group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+    implementation group: 'com.google.guava', name: 'guava'
+    implementation group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
+    implementation group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-autoconfigure'
+    implementation group: 'com.linecorp.armeria', name: 'armeria-grpc'
+    implementation group: 'com.linecorp.armeria', name: 'armeria'
+    implementation group: 'io.grpc', name: 'grpc-api'
+    implementation group: 'io.grpc', name: 'grpc-services'
+    implementation group: 'io.grpc', name: 'grpc-stub'
+    implementation group: 'io.projectreactor', name: 'reactor-core'
+    implementation group: 'org.hipparchus', name: 'hipparchus-core'
+    implementation group: 'org.hipparchus', name: 'hipparchus-geometry'
+    implementation group: 'org.orekit', name: 'orekit'
+    implementation group: 'org.springframework', name: 'spring-beans'
+    implementation group: 'org.springframework', name: 'spring-context'
 
-    compile project(':posed-core')
-    compile group: 'com.github.spotbugs', name: 'spotbugs-annotations'
-    compile group: 'com.google.guava', name: 'guava'
-    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
-    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-autoconfigure'
-    compile group: 'com.linecorp.armeria', name: 'armeria-grpc'
-    compile group: 'io.grpc', name: 'grpc-api'
-    compile group: 'io.grpc', name: 'grpc-services'
-    compile group: 'io.grpc', name: 'grpc-stub'
-    compile group: 'io.projectreactor', name: 'reactor-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
-    compile group: 'org.orekit', name: 'orekit'
-    compile group: 'org.springframework', name: 'spring-beans'
-    compile group: 'org.springframework', name: 'spring-context'
+    permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
 
-    permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
-
-    testCompile project(path: ':posed-core', configuration: 'test')
-    testCompile group: 'junit', name: 'junit'
-    testCompile group: 'org.hamcrest', name: 'hamcrest'
-    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test'
-    testCompile group: 'org.springframework', name: 'spring-beans'
-    testCompile group: 'org.springframework', name: 'spring-test'
+    testImplementation project(path: ':posed-core', configuration: 'test')
+    testImplementation group: 'junit', name: 'junit'
+    testImplementation group: 'org.hamcrest', name: 'hamcrest'
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
+    testImplementation group: 'org.springframework', name: 'spring-beans'
+    testImplementation group: 'org.springframework', name: 'spring-test'
 
     permitTestUnusedDeclared group: 'org.springframework.boot', name: 'spring-boot-starter-test'
   }
+}
 
-  // Copy generated compile dependencies as runtime dependencies
-  configurations.grpcCompile.getAllDependencies()
-    .each({ dep -> dependencies { runtime dep } })
+project(':posed-protos') {
+  apply plugin: 'com.google.protobuf'
 
-  // Add the additional sourceSets to the jacocoTestReport
-  jacocoTestReport {
-    additionalSourceDirs files(sourceSets.grpc.allJava.srcDirs)
-    additionalClassDirs sourceSets.grpc.output
+  dependencies {
+    implementation group: 'com.google.guava', name: 'guava'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java'
+    implementation group: 'io.grpc', name: 'grpc-api'
+    implementation group: 'io.grpc', name: 'grpc-protobuf'
+    implementation group: 'io.grpc', name: 'grpc-stub'
   }
 
   protobuf {
@@ -229,54 +186,46 @@ project(':posed-grpc') {
     }
   }
 
-  // Remove generated code from the cpdCheck
-  rootProject.cpdCheck.source -= sourceSets.grpc.allJava
-
-  checkstyleGrpc.enabled = false
-  licenseGrpc.enabled = false
-  pmdGrpc.enabled = false
-  spotbugsGrpc.enabled = false
-  compileGrpcJava.options.errorprone.enabled = false
-
-  task analyzeGrpcDependencies(
-      type: ca.cutterslade.gradle.analyze.AnalyzeDependenciesTask,
-      dependsOn: grpcClasses) {
-    classesDirs = sourceSets.grpc.output.classesDirs
-    require = [project.configurations.grpcCompileClasspath]
-    allowedToDeclare = [project.configurations.permitGrpcUnusedDeclared]
+  quality {
+    checkstyle = false
+    pmd = false
+    spotbugs = false
   }
-  analyzeDependencies.dependsOn analyzeGrpcDependencies
+
+  licenseMain.enabled = false
+
+  tasks.withType(JavaCompile) {
+    options.errorprone.enabled = false
+    options.compilerArgs.remove('-Xlint:all')
+    options.compilerArgs.remove('-Werror')
+    options.compilerArgs << '-Xlint:none' << '-Xlint:-unchecked'
+  }
 }
 
 project(':posed-service') {
   dependencies {
-    compile project(':posed-core')
-    compile project(':posed-grpc')
-    compile project(':posed-web')
-    compile group: 'com.github.spotbugs', name: 'spotbugs-annotations'
-    compile group: 'com.google.guava', name: 'guava'
-    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
-    compile group: 'org.hipparchus', name: 'hipparchus-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
-    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
-    compile group: 'org.orekit', name: 'orekit'
-    compile group: 'org.slf4j', name: 'slf4j-api'
-    compile group: 'org.springframework.boot', name: 'spring-boot'
-    compile group: 'org.springframework.boot', name: 'spring-boot-autoconfigure'
-    compile group: 'org.springframework', name: 'spring-beans'
-    compile group: 'org.springframework', name: 'spring-context'
-    compile group: 'org.yaml', name: 'snakeyaml'
+    implementation project(':posed-core')
+    implementation project(':posed-grpc')
+    implementation project(':posed-web')
+    implementation group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+    implementation group: 'com.google.guava', name: 'guava'
+    implementation group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
+    implementation group: 'org.hipparchus', name: 'hipparchus-core'
+    implementation group: 'org.hipparchus', name: 'hipparchus-geometry'
+    implementation group: 'org.orekit', name: 'orekit'
+    implementation group: 'org.slf4j', name: 'slf4j-api'
+    implementation group: 'org.springframework.boot', name: 'spring-boot'
+    implementation group: 'org.springframework.boot', name: 'spring-boot-autoconfigure'
+    implementation group: 'org.springframework', name: 'spring-beans'
+    implementation group: 'org.springframework', name: 'spring-context'
+    implementation group: 'org.yaml', name: 'snakeyaml'
 
-    permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
+    permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
 
-    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-test'
+    testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
 
     permitTestUnusedDeclared group: 'org.springframework.boot', name: 'spring-boot-starter-test'
   }
-
-  setStartScripts(project, [
-    'posed': 'posed.service.Main',
-  ], ['-XX:+UseConcMarkSweepGC', '-Xms64m', '-Xmx256m'])
 }
 
 project(':posed-czml') {
@@ -292,12 +241,23 @@ project(':posed-czml') {
   }
 
   dependencies {
-    compile group: 'com.fasterxml.jackson.core', name: 'jackson-annotations'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-annotations'
   }
 
-  compileJava.options.errorprone.enabled = false
+  quality {
+    checkstyle = false
+    pmd = false
+    spotbugs = false
+  }
+
   licenseMain.enabled = false
-  spotbugsMain.enabled = false
+
+  tasks.withType(JavaCompile) {
+    options.errorprone.enabled = false
+    options.compilerArgs.remove('-Xlint:all')
+    options.compilerArgs.remove('-Werror')
+    options.compilerArgs << '-Xlint:none' << '-Xlint:-unchecked'
+  }
 }
 
 project(':posed-web') {
@@ -316,54 +276,55 @@ project(':posed-web') {
   }
 
   dependencies {
-    compile project(':posed-core')
-    compile project(':posed-czml')
-    compile group: 'com.fasterxml.jackson.core', name: 'jackson-core'
-    compile group: 'com.fasterxml.jackson.core', name: 'jackson-databind'
-    compile group: 'com.google.guava', name: 'guava'
-    compile group: 'com.linecorp.armeria', name: 'armeria'
-    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
-    compile group: 'com.sun.xml.bind', name: 'jaxb-impl'
-    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-autoconfigure'
-    compile group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
-    compile group: 'com.linecorp.armeria', name: 'armeria'
-    compile group: 'io.projectreactor', name: 'reactor-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-core'
-    compile group: 'org.hipparchus', name: 'hipparchus-geometry'
-    compile group: 'org.jvnet.ogc', name: 'kml-v_2_2_0'
-    compile group: 'org.orekit', name: 'orekit'
-    compile group: 'org.springframework', name: 'spring-context'
-    compile group: 'org.springframework', name: 'spring-core'
-    compile group: 'org.springframework', name: 'spring-web'
-    compile group: 'org.springframework', name: 'spring-beans'
+    implementation project(':posed-core')
+    implementation project(':posed-czml')
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-core'
+    implementation group: 'com.fasterxml.jackson.core', name: 'jackson-databind'
+    implementation group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+    implementation group: 'com.google.guava', name: 'guava'
+    implementation group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-autoconfigure'
+    implementation group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
+    implementation group: 'com.linecorp.armeria', name: 'armeria'
+    implementation group: 'com.sun.xml.bind', name: 'jaxb-impl'
+    implementation group: 'io.projectreactor', name: 'reactor-core'
+    implementation group: 'jakarta.xml.bind', name: 'jakarta.xml.bind-api'
+    implementation group: 'org.hipparchus', name: 'hipparchus-core'
+    implementation group: 'org.hipparchus', name: 'hipparchus-geometry'
+    implementation group: 'org.jvnet.ogc', name: 'kml-v_2_2_0'
+    implementation group: 'org.orekit', name: 'orekit'
+    implementation group: 'org.springframework', name: 'spring-context'
+    implementation group: 'org.springframework', name: 'spring-core'
+    implementation group: 'org.springframework', name: 'spring-web'
+    implementation group: 'org.springframework', name: 'spring-beans'
 
-    permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot-webflux-starter'
+    permitUnusedDeclared group: 'com.github.spotbugs', name: 'spotbugs-annotations'
+    permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
 
-    runtime group: 'org.glassfish.jaxb', name: 'jaxb-runtime'
+    runtimeOnly group: 'org.glassfish.jaxb', name: 'jaxb-runtime'
   }
 
-  licenseGenerated.exclude "/static/doc/index.html"
+  licenseGenerated.enabled = false
 
   licenseMain.exclude "/static/Cesium/**"
   licenseMain.exclude "/static/CesiumViewer/viewerCesiumNavigationMixin.js"
 
-  task copyProtoFiles {
-    project(':posed-grpc').sourceSets.grpc.proto.srcDirs.each {
+  task copyProtoFiles(dependsOn: [project(':posed-protos').extractProto]) {
+    project(':posed-protos').sourceSets.main.proto.srcDirs.each {
       inputs.dir it
     }
-    outputs.dir "${generatedResourcesDir}/static/proto"
+    outputs.dir "${generatedResourcesDir}/static"
     doLast {
-      mkdir file("${generatedResourcesDir}/static/proto")
+      mkdir file("${generatedResourcesDir}/static")
       copy {
-        from project(':posed-grpc').sourceSets.grpc.proto.srcDirs
-        into file("${generatedResourcesDir}/static/proto")
+        from project(':posed-protos').sourceSets.main.proto.srcDirs
+        into file("${generatedResourcesDir}/static")
       }
     }
   }
 
   task copyAsciidocFiles(type: Copy, dependsOn: rootProject.asciidoctor) {
     into("${generatedResourcesDir}/static/doc")
-    from("${rootProject.buildDir}/asciidoc/html5") {
+    from("${rootProject.buildDir}/docs/asciidoc") {
       exclude '.asciidoctor'
     }
   }
@@ -373,13 +334,23 @@ project(':posed-web') {
   sourcesJar.dependsOn generateResources
 }
 
-distributions {
-  main {
-    contents {
-      // Add our proto file to our distribution output
-      from(project(':posed-grpc').sourceSets.grpc.proto.srcDirs) {
-        into 'proto'
-      }
-    }
-  }
+apply plugin: 'application'
+apply plugin: 'org.springframework.boot'
+application {
+  applicationName = 'posed'
+  mainClass = 'posed.service.Main'
 }
+dependencies {
+  runtimeOnly project(':posed-service')
+}
+bootJar {
+  baseName = 'posed'
+}
+task runBootJar(type: JavaExec) {
+  classpath = files(tasks.bootJar)
+}
+task distBootJar(type: Copy, dependsOn: bootJar) {
+  into file("${distDir}")
+  from bootJar.archiveFile
+}
+dist.dependsOn distBootJar

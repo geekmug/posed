@@ -20,12 +20,12 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.oneOf;
 import static org.hipparchus.util.FastMath.toRadians;
-import static org.junit.Assert.assertThat;
 import static posed.core.PosedMatchers.closeTo;
 
 import java.time.Duration;
@@ -51,7 +51,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 
 import posed.core.frametree.ChangeTrackingFrameTree;
-import reactor.core.publisher.UnicastProcessor;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 @RunWith(SpringRunner.class)
@@ -397,21 +397,21 @@ public class PoseServiceTest {
 
     @Test
     public void testMergeWithEarlyExitCompleted() {
-        UnicastProcessor<Boolean> first = UnicastProcessor.create();
-        UnicastProcessor<Boolean> second = UnicastProcessor.create();
+        Sinks.Many<Boolean> first = Sinks.many().multicast().onBackpressureBuffer();
+        Sinks.Many<Boolean> second = Sinks.many().multicast().onBackpressureBuffer();
         StepVerifier.withVirtualTime(
-                () -> PoseService.mergeWithEarlyExit(first, second))
+                () -> PoseService.mergeWithEarlyExit(first.asFlux(), second.asFlux()))
         .expectSubscription()
         .expectNoEvent(Duration.ofDays(1))
         .then(() -> {
-            first.onNext(Boolean.TRUE);
+            first.tryEmitNext(Boolean.TRUE);
         })
         .assertNext(v -> {
             assertThat(v, is(equalTo(Boolean.TRUE)));
         })
         .expectNoEvent(Duration.ofDays(1))
         .then(() -> {
-            second.onComplete();
+            second.tryEmitComplete();
         })
         .expectComplete()
         .verify();
@@ -419,21 +419,21 @@ public class PoseServiceTest {
 
     @Test
     public void testMergeWithEarlyExitError() {
-        UnicastProcessor<Boolean> first = UnicastProcessor.create();
-        UnicastProcessor<Boolean> second = UnicastProcessor.create();
+        Sinks.Many<Boolean> first = Sinks.many().multicast().onBackpressureBuffer();
+        Sinks.Many<Boolean> second = Sinks.many().multicast().onBackpressureBuffer();
         StepVerifier.withVirtualTime(
-                () -> PoseService.mergeWithEarlyExit(first, second))
+                () -> PoseService.mergeWithEarlyExit(first.asFlux(), second.asFlux()))
         .expectSubscription()
         .expectNoEvent(Duration.ofDays(1))
         .then(() -> {
-            second.onNext(Boolean.TRUE);
+            second.tryEmitNext(Boolean.TRUE);
         })
         .assertNext(v -> {
             assertThat(v, is(equalTo(Boolean.TRUE)));
         })
         .expectNoEvent(Duration.ofDays(1))
         .then(() -> {
-            first.onError(new RuntimeException("test"));
+            first.tryEmitError(new RuntimeException("test"));
         })
         .expectError()
         .verify();

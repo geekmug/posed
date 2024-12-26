@@ -23,7 +23,7 @@ import org.springframework.context.annotation.Import;
 
 import com.linecorp.armeria.common.grpc.GrpcSerializationFormats;
 import com.linecorp.armeria.server.grpc.GrpcService;
-import com.linecorp.armeria.spring.GrpcServiceRegistrationBean;
+import com.linecorp.armeria.spring.ArmeriaServerConfigurator;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import io.grpc.protobuf.services.ProtoReflectionService;
@@ -35,33 +35,39 @@ import posed.core.PosedCoreConfiguration;
 @Import(PosedCoreConfiguration.class)
 public class PosedGrpcConfiguration {
     /**
-     * Gets a registration bean for the GRPC reflection service.
-     * @return a registration bean for the GRPC reflection service
+     * Gets a server configurator for the GRPC reflection service.
+     * @return a server configurator for the GRPC reflection service
      */
     @Bean
-    public GrpcServiceRegistrationBean protoReflectionService() {
-        return new GrpcServiceRegistrationBean()
-                .setServiceName("ProtoReflectionService")
-                .setService(GrpcService.builder()
-                        .addService(ProtoReflectionService.newInstance())
-                        .build());
+    public ArmeriaServerConfigurator protoReflectionService() {
+        return builder -> {
+            builder.service(GrpcService.builder()
+                    .addService(ProtoReflectionService.newInstance())
+                    .autoCompression(true)
+                    .enableHttpJsonTranscoding(true)
+                    .enableUnframedRequests(true)
+                    .supportedSerializationFormats(GrpcSerializationFormats.values())
+                    .build());
+        };
     }
 
     /**
-     * Gets a registration bean for the PoseGrpcService.
+     * Gets a server configurator for the PoseGrpcService.
      * @param service instance of PoseGrpcService
-     * @return a registration bean for the PoseGrpcService
+     * @return a server configurator for the PoseGrpcService
      */
     @Bean
     @SuppressFBWarnings("OCP_OVERLY_CONCRETE_PARAMETER")
-    public GrpcServiceRegistrationBean poseServiceGrpc(PoseGrpcService service) {
-        return new GrpcServiceRegistrationBean()
-                .setServiceName("PosedService")
-                .setService(GrpcService.builder()
-                        .addService(service)
-                        .supportedSerializationFormats(GrpcSerializationFormats.values())
-                        .enableUnframedRequests(true)
-                        .useBlockingTaskExecutor(true)
-                        .build());
+    public ArmeriaServerConfigurator poseServiceGrpc(PoseGrpcService service) {
+        return builder -> {
+            builder.service(GrpcService.builder()
+                    .addService(service)
+                    .autoCompression(true)
+                    .enableHttpJsonTranscoding(true)
+                    .enableUnframedRequests(true)
+                    .supportedSerializationFormats(GrpcSerializationFormats.values())
+                    .useBlockingTaskExecutor(true)
+                    .build());
+        };
     }
 }

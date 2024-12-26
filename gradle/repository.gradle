@@ -16,15 +16,43 @@
 
 allprojects {
   repositories {
-    maven {
-      url "${artifactory_contextUrl}/libs-release"
-      credentials {
-        username = "${artifactory_user}"
-        password = "${artifactory_password}"
-      }
-    }
-    // Use public repositories if the private artifactory is unavailable.
-    jcenter();
+    mavenCentral();
     mavenLocal();
+  }
+
+  dependencyLocking {
+    lockMode = LockMode.STRICT
+  }
+
+  configurations {
+    annotationProcessor {
+      resolutionStrategy.activateDependencyLocking()
+    }
+    compileClasspath {
+      resolutionStrategy.activateDependencyLocking()
+    }
+    runtimeClasspath {
+      resolutionStrategy.activateDependencyLocking()
+    }
+    testAnnotationProcessor {
+      resolutionStrategy.activateDependencyLocking()
+    }
+    testCompileClasspath {
+      resolutionStrategy.activateDependencyLocking()
+    }
+    testRuntimeClasspath {
+      resolutionStrategy.activateDependencyLocking()
+    }
+  }
+
+  // To invoke: ./gradlew resolveAndLockAll --write-locks
+  tasks.register('resolveAndLockAll') {
+    notCompatibleWithConfigurationCache("Filters configuration at execution time")
+    doFirst {
+      assert gradle.startParameter.writeDependencyLocks
+    }
+    doLast {
+      configurations.findAll { it.canBeResolved }.each { it.resolve() }
+    }
   }
 }

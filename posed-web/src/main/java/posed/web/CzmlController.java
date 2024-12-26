@@ -18,8 +18,6 @@ package posed.web;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
-import java.time.Duration;
-
 import org.hipparchus.geometry.euclidean.threed.Rotation;
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.orekit.bodies.GeodeticPoint;
@@ -211,7 +209,7 @@ public class CzmlController {
             @RequestParam(name = "scale", required = false, defaultValue = "1.0") double scale) {
         ServiceRequestContext ctx = (ServiceRequestContext) RequestContext.current();
         // Disable the request timeout on this SSE stream:
-        ctx.setRequestTimeout(Duration.ZERO);
+        ctx.clearRequestTimeout();
         // Set the content-type header for this SSE stream:
         ctx.addAdditionalResponseHeader("content-type", MediaType.TEXT_EVENT_STREAM_VALUE);
         // Start streaming CZML documents:

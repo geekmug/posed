@@ -17,13 +17,13 @@
 package posed.core;
 
 import org.orekit.data.ClasspathCrawler;
-import org.orekit.data.DataProvidersManager;
+import org.orekit.data.DataContext;
 import org.orekit.forces.gravity.potential.EGMFormatReader;
-import org.orekit.forces.gravity.potential.GravityFieldFactory;
 import org.orekit.forces.gravity.potential.NormalizedSphericalHarmonicsProvider;
 import org.orekit.frames.FramesFactory;
 import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
+import org.orekit.time.AbsoluteDate;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -40,15 +40,16 @@ public class PosedCoreConfiguration {
         final int maxDegree = 360;
         final int maxOrder = 360;
         // Load the EGM96 coefficients from our class path
-        DataProvidersManager.getInstance().addProvider(
+        DataContext.getDefault().getDataProvidersManager().addProvider(
                 new ClasspathCrawler(
                         PosedCoreConfiguration.class.getPackage().getName()
                         .replace('.', '/') + "/egm96"));
-        GravityFieldFactory.clearPotentialCoefficientsReaders();
-        GravityFieldFactory.addPotentialCoefficientsReader(
+        DataContext.getDefault().getGravityFields().clearPotentialCoefficientsReaders();
+        DataContext.getDefault().getGravityFields().addPotentialCoefficientsReader(
                 new EGMFormatReader(".*egm96", false));
-        NormalizedSphericalHarmonicsProvider geopotential =
-                GravityFieldFactory.getConstantNormalizedProvider(maxDegree, maxOrder);
+        NormalizedSphericalHarmonicsProvider geopotential = DataContext.getDefault()
+                .getGravityFields().getConstantNormalizedProvider(
+                        maxDegree, maxOrder, AbsoluteDate.ARBITRARY_EPOCH);
         GEOID = new Geoid(geopotential, WGS84);
     }
 

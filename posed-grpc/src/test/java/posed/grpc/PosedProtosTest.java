@@ -17,9 +17,9 @@
 package posed.grpc;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hipparchus.util.FastMath.PI;
-import static org.junit.Assert.assertThat;
 import static posed.core.PosedMatchers.closeTo;
 
 import org.hipparchus.geometry.euclidean.threed.Vector3D;

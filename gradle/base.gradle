@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-wrapper {
-  gradleVersion = gradleWrapperVersion
-  distributionUrl = "https://artifactory.scottdial.com:5000/services.gradle.org/distributions/gradle-${gradleVersion}-bin.zip"
-}
-
 apply plugin: 'base'
 
 ext.distDir = file("${projectDir}/dist")

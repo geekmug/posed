@@ -17,10 +17,10 @@
 package posed.core;
 
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.closeTo;
 import static org.hipparchus.util.FastMath.PI;
 import static org.hipparchus.util.FastMath.toRadians;
-import static org.junit.Assert.assertThat;
 
 import org.hipparchus.geometry.euclidean.threed.Rotation;
 import org.junit.Test;

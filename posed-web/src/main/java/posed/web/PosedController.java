@@ -22,6 +22,7 @@ import static org.hipparchus.util.FastMath.toDegrees;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
@@ -50,7 +51,6 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.ByteStreams;
 import com.sun.xml.bind.marshaller.NamespacePrefixMapper;
@@ -266,7 +266,7 @@ public class PosedController {
                 factory.getClass().getPackage().getName(),
                 factory.getClass().getClassLoader());
         Marshaller marshaller = context.createMarshaller();
-        marshaller.setProperty(Marshaller.JAXB_ENCODING, Charsets.UTF_8.displayName());
+        marshaller.setProperty(Marshaller.JAXB_ENCODING, StandardCharsets.UTF_8.displayName());
         marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
         marshaller.setProperty(PREFIX_MAPPER, new KmlNamespacePrefixMapper());
         marshaller.marshal(factory.createKml(kml), out);

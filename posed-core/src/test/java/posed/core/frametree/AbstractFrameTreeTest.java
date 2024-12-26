@@ -21,15 +21,14 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.sameInstance;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.orekit.frames.Frame;
 import org.orekit.frames.FramesFactory;
 import org.orekit.frames.Transform;
@@ -43,9 +42,6 @@ import posed.core.NauticalAngles;
 import posed.core.Pose;
 
 public abstract class AbstractFrameTreeTest {
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
-
     protected abstract FrameTree newFrameTree(Frame root);
 
     @Test
@@ -87,8 +83,9 @@ public abstract class AbstractFrameTreeTest {
         FrameTree tree = newFrameTree(FramesFactory.getGCRF());
         tree.createRoot("A");
         tree.create("A", "B", Pose.IDENTITY);
-        thrown.expect(IllegalArgumentException.class);
-        tree.createRoot("B");
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.createRoot("B");
+        });
     }
 
     @Test
@@ -140,8 +137,9 @@ public abstract class AbstractFrameTreeTest {
         FrameTree tree = newFrameTree(FramesFactory.getGCRF());
         tree.createRoot("A");
         tree.create("A", "B", Pose.IDENTITY);
-        thrown.expect(IllegalArgumentException.class);
-        tree.remove("A");
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.remove("A");
+        });
     }
 
     @Test
@@ -184,8 +182,9 @@ public abstract class AbstractFrameTreeTest {
     @Test
     public void testCreateWithUnknownParent() {
         FrameTree tree = newFrameTree(FramesFactory.getGCRF());
-        thrown.expect(IllegalArgumentException.class);
-        tree.create("test", "B", Pose.IDENTITY);
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.create("test", "B", Pose.IDENTITY);
+        });
     }
 
     @Test
@@ -194,8 +193,9 @@ public abstract class AbstractFrameTreeTest {
         tree.createRoot("A");
         tree.create("A", "B", Pose.IDENTITY);
         tree.create("B", "C", Pose.IDENTITY);
-        thrown.expect(IllegalArgumentException.class);
-        tree.create("A", "C", Pose.IDENTITY);
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.create("A", "C", Pose.IDENTITY);
+        });
     }
 
     @Test

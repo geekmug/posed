@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-apply plugin: 'org.asciidoctor.convert'
+allprojects {
+  apply plugin: 'org.asciidoctor.jvm.convert'
 
-dependencies {
-  asciidoctor group: 'org.asciidoctor', name: 'asciidoctorj-diagram', version: asciidoctorjDiagramVersion
-}
-
-asciidoctor {
-  sourceDir file('doc')
-  requires 'asciidoctor-diagram'
-}
-
-asciidoctorj {
-  noDefaultRepositories = true
-}
-
-build.dependsOn asciidoctor
-
-task distAsciidoctor(type: Copy, dependsOn: asciidoctor) {
-  into("${distDir}/doc")
-  from("${buildDir}/asciidoc/html5") {
-    exclude '.asciidoctor'
+  asciidoctorj {
+    modules {
+      diagram.use()
+      diagram.version asciidoctorjDiagramVersion
+    }
   }
+
+  asciidoctor {
+    sourceDir file('doc')
+  }
+
+  build.dependsOn asciidoctor
+
+  task distAsciidoctor(type: Copy, dependsOn: asciidoctor) {
+    into("${distDir}/doc")
+    from("${buildDir}/docs/asciidoc") {
+      exclude '.asciidoctor'
+    }
+  }
+  dist.dependsOn distAsciidoctor
 }
-dist.dependsOn distAsciidoctor

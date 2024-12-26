@@ -25,8 +25,8 @@ import org.orekit.frames.TransformProvider;
 import com.google.common.collect.ImmutableList;
 
 import posed.core.Pose;
-import reactor.core.publisher.EmitterProcessor;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Sinks;
 
 /**
  * A proxy class that allows tracking changes to the {@code FrameTree}.
@@ -63,7 +63,7 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
     }
 
     private final Object changeMonitor = new Object();
-    private final EmitterProcessor<Change> changeProcessor = EmitterProcessor.create();
+    private final Sinks.Many<Change> changeSink = Sinks.many().multicast().onBackpressureBuffer();
     private final T delegate;
 
     /**
@@ -97,13 +97,13 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
             return Flux.concat(
                     Flux.fromStream(frames.stream()
                             .map(frame -> new Created(frame))),
-                    changeProcessor.hide());
+                    changeSink.asFlux());
         }
     }
 
     private void emitCreates(String name) {
         delegate.traverse(name).forEach(frame -> {
-            changeProcessor.onNext(new Created(frame));
+            changeSink.tryEmitNext(new Created(frame));
         });
     }
 
@@ -143,7 +143,7 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
     public void remove(String name) {
         synchronized (changeMonitor) {
             delegate.remove(name);
-            changeProcessor.onNext(new Removed(name));
+            changeSink.tryEmitNext(new Removed(name));
         }
     }
 

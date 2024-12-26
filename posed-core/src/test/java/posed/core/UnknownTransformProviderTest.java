@@ -16,27 +16,26 @@
 
 package posed.core;
 
-import org.hipparchus.util.Decimal64Field;
-import org.junit.Rule;
+import static org.junit.Assert.assertThrows;
+
+import org.hipparchus.util.Binary64Field;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.orekit.time.AbsoluteDate;
 import org.orekit.time.FieldAbsoluteDate;
 
 public class UnknownTransformProviderTest {
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
-
     @Test
     public void testGetTransform() {
-        thrown.expect(UnknownTransformException.class);
-        UnknownTransformProvider.INSTANCE.getTransform(AbsoluteDate.PAST_INFINITY);
+        assertThrows(UnknownTransformException.class, () -> {
+            UnknownTransformProvider.INSTANCE.getTransform(AbsoluteDate.PAST_INFINITY);
+        });
     }
 
     @Test
     public void testGetTransformField() {
-        thrown.expect(UnknownTransformException.class);
-        UnknownTransformProvider.INSTANCE.getTransform(
-                FieldAbsoluteDate.getPastInfinity(Decimal64Field.getInstance()));
+        assertThrows(UnknownTransformException.class, () -> {
+            UnknownTransformProvider.INSTANCE.getTransform(
+                    FieldAbsoluteDate.getPastInfinity(Binary64Field.getInstance()));
+        });
     }
 }
