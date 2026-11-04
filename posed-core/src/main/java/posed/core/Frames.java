@@ -52,8 +52,10 @@ public final class Frames {
 
         // Create a Frame based on the pose, so we can get it's transform.
         Frame poseFrame = new Frame(src, makeTransform(pose), "");
-        Transform xfrm = poseFrame.getTransformTo(dst, AbsoluteDate.PAST_INFINITY);
-        return new Pose(xfrm.getTranslation(), new NauticalAngles(xfrm.getRotation()));
+        Transform xfrm = dst.getTransformTo(poseFrame, AbsoluteDate.PAST_INFINITY);
+        return new Pose(
+                xfrm.getTranslation().negate(),
+                new NauticalAngles(xfrm.getRotation()));
     }
 
     private Frames() {}

@@ -21,6 +21,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hipparchus.util.FastMath.toRadians;
 import static posed.core.PosedMatchers.closeTo;
 
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.junit.Test;
 import org.orekit.frames.Frame;
 import org.orekit.frames.FramesFactory;
@@ -37,5 +38,37 @@ public class FramesTest {
         Frame dst = new Frame(src, Transform.IDENTITY, "");
         Pose pose = Frames.transform(FramesFactory.getGCRF(), dst, Pose.IDENTITY);
         assertThat(pose, is(closeTo(Pose.IDENTITY, POSITION_ERROR, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testTransformToSameFrameKeepsPose() {
+        Frame frame = FramesFactory.getGCRF();
+        Pose pose = new Pose(new Vector3D(1, 2, 3), new NauticalAngles(0.1, 0.2, 0.3));
+        assertThat(Frames.transform(frame, frame, pose),
+                is(closeTo(pose, POSITION_ERROR, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testTransformIntoRotatedFrame() {
+        // The destination faces the source's right, so the source's front is on its left.
+        Frame src = FramesFactory.getGCRF();
+        Frame dst = new Frame(src, Frames.makeTransform(new Pose(
+                Vector3D.ZERO, new NauticalAngles(0, 0, toRadians(90)))), "dst");
+        Pose pose = new Pose(new Vector3D(10, 0, 0), NauticalAngles.IDENTITY);
+        assertThat(Frames.transform(src, dst, pose), is(closeTo(
+                new Pose(new Vector3D(0, -10, 0), new NauticalAngles(0, 0, toRadians(-90))),
+                POSITION_ERROR, ANGLE_ERROR)));
+    }
+
+    @Test
+    public void testTransformFromRotatedFrame() {
+        // The source faces the destination's right, so its front is on the destination's right.
+        Frame dst = FramesFactory.getGCRF();
+        Frame src = new Frame(dst, Frames.makeTransform(new Pose(
+                Vector3D.ZERO, new NauticalAngles(0, 0, toRadians(90)))), "src");
+        Pose pose = new Pose(new Vector3D(10, 0, 0), NauticalAngles.IDENTITY);
+        assertThat(Frames.transform(src, dst, pose), is(closeTo(
+                new Pose(new Vector3D(0, 10, 0), new NauticalAngles(0, 0, toRadians(90))),
+                POSITION_ERROR, ANGLE_ERROR)));
     }
 }
