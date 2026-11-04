@@ -144,6 +144,7 @@ project(':posed-grpc') {
     testImplementation project(path: ':posed-core', configuration: 'test')
     testImplementation group: 'junit', name: 'junit'
     testImplementation group: 'org.hamcrest', name: 'hamcrest'
+    testImplementation group: 'org.mockito', name: 'mockito-core'
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
     testImplementation group: 'org.springframework', name: 'spring-beans'
     testImplementation group: 'org.springframework', name: 'spring-test'

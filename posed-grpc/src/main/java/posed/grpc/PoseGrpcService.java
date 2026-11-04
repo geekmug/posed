@@ -19,6 +19,8 @@ package posed.grpc;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.function.Function;
+
 import org.orekit.frames.Transform;
 import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
@@ -33,6 +35,7 @@ import com.google.common.collect.Streams;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
+import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import posed.core.GeodeticFrames;
 import posed.core.GeodeticPose;
@@ -60,6 +63,9 @@ import posed.grpc.proto.TraverseReply;
 import posed.grpc.proto.TraverseRequest;
 import posed.grpc.proto.UpdateReply;
 import posed.grpc.proto.UpdateRequest;
+import reactor.core.Disposable;
+import reactor.core.Disposables;
+import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 /** GRPC service instance for managing poses. */
@@ -77,6 +83,32 @@ public class PoseGrpcService extends PoseServiceImplBase {
             status = Status.UNKNOWN;
         }
         return status.withDescription(t.getMessage()).asException();
+    }
+
+    /**
+     * Sends a reply for each value in a stream until the client cancels the call.
+     * @param <T> type of the values in the stream
+     * @param <R> type of the replies
+     * @param values stream of values to send
+     * @param toReply function for encoding a value as a reply
+     * @param responseObserver observer for the replies
+     */
+    private static <T, R> void sendStream(Flux<T> values, Function<T, R> toReply,
+            StreamObserver<R> responseObserver) {
+        // The handler can only be set during the initial call, which is also
+        // before a cancellation can be delivered to it.
+        Disposable.Swap subscription = Disposables.swap();
+        ((ServerCallStreamObserver<R>) responseObserver).setOnCancelHandler(subscription::dispose);
+
+        subscription.update(values
+                .subscribeOn(Schedulers.boundedElastic())
+                .subscribe(value -> {
+                    responseObserver.onNext(toReply.apply(value));
+                }, error -> {
+                    responseObserver.onError(Status.INTERNAL.withCause(error).asException());
+                }, () -> {
+                    responseObserver.onCompleted();
+                }));
     }
 
     private final PoseService poseService;
@@ -290,20 +322,15 @@ public class PoseGrpcService extends PoseServiceImplBase {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
 
-            poseService.convertStream(
-                    request.getFrame(), PosedProtos.decode(geoid, request.getGeopose()))
-            .subscribeOn(Schedulers.boundedElastic())
-            .subscribe(pose -> {
-                ConvertLocalReply.Builder builder = ConvertLocalReply.newBuilder();
-                if (pose.isPresent()) {
-                    builder.setPose(PosedProtos.encode(pose.get()));
-                }
-                responseObserver.onNext(builder.build());
-            }, error -> {
-                responseObserver.onError(Status.INTERNAL.withCause(error).asException());
-            }, () -> {
-                responseObserver.onCompleted();
-            });
+            sendStream(poseService.convertStream(
+                    request.getFrame(), PosedProtos.decode(geoid, request.getGeopose())),
+                    pose -> {
+                        ConvertLocalReply.Builder builder = ConvertLocalReply.newBuilder();
+                        if (pose.isPresent()) {
+                            builder.setPose(PosedProtos.encode(pose.get()));
+                        }
+                        return builder.build();
+                    }, responseObserver);
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
         }
@@ -334,20 +361,15 @@ public class PoseGrpcService extends PoseServiceImplBase {
         try {
             checkArgument(!request.getFrame().isEmpty(), "no frame specified");
 
-            poseService.convertStream(
-                    request.getFrame(), PosedProtos.decode(request.getPose()))
-            .subscribeOn(Schedulers.boundedElastic())
-            .subscribe(pose -> {
-                ConvertGeodeticReply.Builder builder = ConvertGeodeticReply.newBuilder();
-                if (pose.isPresent()) {
-                    builder.setGeopose(PosedProtos.encode(geoid, pose.get()));
-                }
-                responseObserver.onNext(builder.build());
-            }, error -> {
-                responseObserver.onError(Status.INTERNAL.withCause(error).asException());
-            }, () -> {
-                responseObserver.onCompleted();
-            });
+            sendStream(poseService.convertStream(
+                    request.getFrame(), PosedProtos.decode(request.getPose())),
+                    pose -> {
+                        ConvertGeodeticReply.Builder builder = ConvertGeodeticReply.newBuilder();
+                        if (pose.isPresent()) {
+                            builder.setGeopose(PosedProtos.encode(geoid, pose.get()));
+                        }
+                        return builder.build();
+                    }, responseObserver);
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
         }
@@ -382,21 +404,16 @@ public class PoseGrpcService extends PoseServiceImplBase {
             checkArgument(!request.getSrcFrame().isEmpty(), "no source frame specified");
             checkArgument(!request.getDstFrame().isEmpty(), "no destination frame specified");
 
-            poseService.transformStream(
+            sendStream(poseService.transformStream(
                     request.getSrcFrame(), request.getDstFrame(),
-                    PosedProtos.decode(request.getPose()))
-            .subscribeOn(Schedulers.boundedElastic())
-            .subscribe(pose -> {
-                TransformReply.Builder builder = TransformReply.newBuilder();
-                if (pose.isPresent()) {
-                    builder.setPose(PosedProtos.encode(pose.get()));
-                }
-                responseObserver.onNext(builder.build());
-            }, error -> {
-                responseObserver.onError(Status.INTERNAL.withCause(error).asException());
-            }, () -> {
-                responseObserver.onCompleted();
-            });
+                    PosedProtos.decode(request.getPose())),
+                    pose -> {
+                        TransformReply.Builder builder = TransformReply.newBuilder();
+                        if (pose.isPresent()) {
+                            builder.setPose(PosedProtos.encode(pose.get()));
+                        }
+                        return builder.build();
+                    }, responseObserver);
         } catch (Throwable t) {
             responseObserver.onError(toGrpc(t));
         }
