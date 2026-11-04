@@ -155,6 +155,8 @@ final class PosedProtos {
 
     public static Pair<posed.grpc.proto.Cartesian, posed.grpc.proto.Spherical> encode(
             Vector3D position) {
+        // The elevation of a zero vector is undefined, and getDelta gives NaN.
+        double elevation = position.equals(Vector3D.ZERO) ? 0 : -position.getDelta();
         return Pair.create(posed.grpc.proto.Cartesian.newBuilder()
                 .setX(position.getX())
                 .setY(position.getY())
@@ -162,7 +164,7 @@ final class PosedProtos {
                 .build(),
                 posed.grpc.proto.Spherical.newBuilder()
                 .setAzimuth(toDegrees(position.getAlpha()))
-                .setElevation(toDegrees(-position.getDelta()))
+                .setElevation(toDegrees(elevation))
                 .setRadius(position.getNorm())
                 .build());
     }

@@ -90,6 +90,22 @@ public class PosedProtosTest {
     }
 
     @Test
+    public void testEncodeSphericalAtOrigin() {
+        posed.grpc.proto.Spherical encoded = PosedProtos.encode(Vector3D.ZERO).getSecond();
+        assertThat(encoded.getAzimuth(), is(closeTo(0, 0.000001)));
+        assertThat(encoded.getElevation(), is(closeTo(0, 0.000001)));
+        assertThat(encoded.getRadius(), is(closeTo(0, 0.000001)));
+    }
+
+    @Test
+    public void testEncodeSphericalUp() {
+        posed.grpc.proto.Spherical encoded =
+                PosedProtos.encode(new Vector3D(0, 0, -100)).getSecond();
+        assertThat(encoded.getElevation(), is(closeTo(90, 0.000001)));
+        assertThat(encoded.getRadius(), is(closeTo(100, 0.000001)));
+    }
+
+    @Test
     public void testDecodeSphericalForward() {
         posed.grpc.proto.Spherical v = posed.grpc.proto.Spherical.newBuilder()
                 .setAzimuth(0)
