@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -127,7 +128,8 @@ public class PosedController {
         double undulation = geoid.getUndulation(
                 position.getLatitude(), position.getLongitude(),
                 AbsoluteDate.PAST_INFINITY);
-        return String.format("%f,%f,%f",
+        // KML always uses a period for a decimal separator, whatever our locale.
+        return String.format(Locale.ROOT, "%f,%f,%f",
                 toDegrees(position.getLongitude()),
                 toDegrees(position.getLatitude()),
                 position.getAltitude() - undulation);

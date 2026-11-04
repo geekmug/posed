@@ -301,6 +301,9 @@ project(':posed-web') {
     permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
 
     runtimeOnly group: 'org.glassfish.jaxb', name: 'jaxb-runtime'
+
+    testImplementation group: 'junit', name: 'junit'
+    testImplementation group: 'org.hamcrest', name: 'hamcrest'
   }
 
   licenseGenerated.enabled = false
