@@ -50,7 +50,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.constructor.SafeConstructor;
 import org.yaml.snakeyaml.error.YAMLException;
 
 import com.google.common.collect.ImmutableMap;
@@ -227,11 +229,12 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
 
         saveFileHasProblems = false;
 
-        Map<?, ?> roots;
+        Object document;
 
-        Yaml yaml = new Yaml();
+        // Only allow standard types, since tags could otherwise run arbitrary constructors.
+        Yaml yaml = new Yaml(new SafeConstructor(new LoaderOptions()));
         try (Reader reader = Files.newBufferedReader(filename, StandardCharsets.UTF_8)) {
-            roots = yaml.loadAs(reader, Map.class);
+            document = yaml.load(reader);
         } catch (NoSuchFileException e) {
             LOG.info("no save file to load: {}", filename);
             return;
@@ -241,9 +244,14 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
             return;
         }
 
-        if (roots == null) {
+        if (document == null) {
+            return;
+        } else if (!(document instanceof Map)) {
+            LOG.warn("expected save file to contain a map: {}", document);
+            saveFileHasProblems = true;
             return;
         }
+        Map<?, ?> roots = (Map<?, ?>) document;
 
         boolean complete = true;
         String bodyFrame = poseService.getReferenceEllipsoid().getBodyFrame().getName();

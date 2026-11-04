@@ -18,10 +18,12 @@ package posed.service;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.arrayContaining;
+import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 
 import java.io.IOException;
@@ -29,8 +31,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,13 +46,24 @@ import org.orekit.models.earth.ReferenceEllipsoid;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 
+import posed.core.NauticalAngles;
 import posed.core.Pose;
 import posed.core.PoseService;
 
 public class LoadAndSaveServiceTest {
+    /** A type that records being constructed from a tag in a save file. */
+    public static final class Marker {
+        private static final AtomicBoolean CONSTRUCTED = new AtomicBoolean();
+
+        public Marker() {
+            CONSTRUCTED.set(true);
+        }
+    }
+
     private static final String CRON_DISABLED = "-";
     private static final String CRON_ENABLED = "0 * * * * *";
     private static final String ADDED_FRAME = "added";
+    private static final double ERROR = 0.000001;
     private static final String SAVE_FILE = "---\n"
             + "root:\n"
             + "  position: {x: 1.0, y: 2.0, z: 3.0}\n"
@@ -165,6 +180,38 @@ public class LoadAndSaveServiceTest {
     }
 
     @Test
+    public void testSavedTransformsCanBeLoaded() {
+        Pose rootPose = new Pose(new Vector3D(1, 2, 3), new NauticalAngles(0.1, 0.2, 0.3));
+        Pose childPose = new Pose(new Vector3D(4, 5, 6), new NauticalAngles(0.4, 0.5, 0.6));
+        PoseService poseService = newPoseService();
+        poseService.createRoot("root");
+        poseService.create("GCRF", "root", rootPose);
+        poseService.create("root", "child", childPose);
+        newService(poseService, CRON_ENABLED).destroy();
+
+        PoseService loaded = newPoseService();
+        LoadAndSaveService service = newService(loaded, CRON_ENABLED);
+        service.afterPropertiesSet();
+        assertThat(frameNames(loaded), is(equalTo(ImmutableList.of("GCRF", "root", "child"))));
+        Pose expected = poseService.transform("child", "GCRF", Pose.IDENTITY).get();
+        Pose actual = loaded.transform("child", "GCRF", Pose.IDENTITY).get();
+        assertThat(actual.getPosition().distance(expected.getPosition()), is(closeTo(0, ERROR)));
+        assertThat(actual.getOrientation().getRoll(),
+                is(closeTo(expected.getOrientation().getRoll(), ERROR)));
+        assertThat(actual.getOrientation().getPitch(),
+                is(closeTo(expected.getOrientation().getPitch(), ERROR)));
+        assertThat(actual.getOrientation().getYaw(),
+                is(closeTo(expected.getOrientation().getYaw(), ERROR)));
+
+        // The file had no problems, so saving remains enabled.
+        loaded.createRoot(ADDED_FRAME);
+        service.destroy();
+        PoseService resaved = newPoseService();
+        newService(resaved, CRON_DISABLED).afterPropertiesSet();
+        assertThat(frameNames(resaved), hasItem(ADDED_FRAME));
+    }
+
+    @Test
     public void testSavesAfterMissingSaveFile() throws IOException {
         PoseService poseService = newPoseService();
         LoadAndSaveService service = newService(poseService, CRON_ENABLED);
@@ -193,6 +240,17 @@ public class LoadAndSaveServiceTest {
             assertThat(startAndStop(contents), is(equalTo(ImmutableList.of("GCRF"))));
             assertLeftAsIs(contents);
         }
+    }
+
+    @Test
+    public void testDoesNotInstantiateTaggedTypes() throws IOException {
+        Marker.CONSTRUCTED.set(false);
+        String contents = "---\n"
+                + "root: !!" + Marker.class.getName() + " {}\n";
+        List<String> names = startAndStop(contents);
+        assertThat(Marker.CONSTRUCTED.get(), is(equalTo(false)));
+        assertThat(names, is(equalTo(ImmutableList.of("GCRF"))));
+        assertLeftAsIs(contents);
     }
 
     @Test
