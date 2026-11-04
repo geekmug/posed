@@ -107,7 +107,8 @@ public class PoseService {
             }
         } else {
             String name = ((ChangeTrackingFrameTree.Removed) change).getName();
-            Sinks.Many<Boolean> sink = updateSinks.get(name);
+            // A completed sink is of no use to a frame later created with this name.
+            Sinks.Many<Boolean> sink = updateSinks.remove(name);
             if (sink != null) {
                 sink.tryEmitComplete();
             }

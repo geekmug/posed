@@ -276,6 +276,36 @@ public class PoseServiceTest {
     }
 
     @Test
+    public void testStreamOfRecreatedFrame() {
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("below", Pose.IDENTITY))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .then(() -> poseService.remove("below"))
+        .expectComplete()
+        .verify();
+
+        poseService.create("root", "below",
+                new Pose(new Vector3D(0, 0, 1), NauticalAngles.IDENTITY));
+
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("below", Pose.IDENTITY))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .expectNoEvent(Duration.ofDays(1))
+        .then(() -> poseService.update("root", TEST_POSE))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify();
+    }
+
+    @Test
     public void testTransform() {
         assertThat(poseService.transform("front", "below", Pose.IDENTITY).get(),
                 is(closeTo(new Pose(
