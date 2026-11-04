@@ -222,6 +222,8 @@ project(':posed-service') {
 
     permitUnusedDeclared group: 'com.linecorp.armeria', name: 'armeria-spring-boot2-webflux-starter'
 
+    testImplementation group: 'junit', name: 'junit'
+    testImplementation group: 'org.hamcrest', name: 'hamcrest'
     testImplementation group: 'org.springframework.boot', name: 'spring-boot-starter-test'
 
     permitTestUnusedDeclared group: 'org.springframework.boot', name: 'spring-boot-starter-test'

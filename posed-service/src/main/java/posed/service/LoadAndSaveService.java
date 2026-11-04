@@ -23,6 +23,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -56,7 +57,12 @@ import posed.core.PoseService;
 import posed.core.UnknownTransformException;
 import posed.core.UnknownTransformProvider;
 
-/** Loads and (periodically) saves the state of the PoseService. */
+/**
+ * Loads and (periodically) saves the state of the PoseService.
+ *
+ * <p>The state is always loaded on startup if the file exists. The state is
+ * only saved, periodically and on shutdown, if a valid cron expression is given.
+ */
 @Service
 public class LoadAndSaveService implements InitializingBean, DisposableBean {
     private static final Logger LOG = LoggerFactory.getLogger(LoadAndSaveService.class);
@@ -72,7 +78,8 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
      * @param filename filename for loading/saving
      * @param cron cron-like expression, extending the usual UN*X definition to
      *          include triggers on the second, minute, hour, day of month,
-     *          month, and day of week.
+     *          month, and day of week. Saving is disabled if this is not a
+     *          valid expression, such as "-".
      */
     @Autowired
     @SuppressFBWarnings("PATH_TRAVERSAL_IN")
@@ -87,9 +94,7 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
 
     @Override
     public final void afterPropertiesSet() {
-        if (autosave) {
-            load();
-        }
+        load();
     }
 
     @Override
@@ -229,6 +234,9 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         Yaml yaml = new Yaml();
         try (Reader reader = Files.newBufferedReader(filename, StandardCharsets.UTF_8)) {
             roots = yaml.loadAs(reader, Map.class);
+        } catch (NoSuchFileException e) {
+            LOG.info("no save file to load: {}", filename);
+            return;
         } catch (IOException e) {
             LOG.warn("failed to load save file", e);
             return;
