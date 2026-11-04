@@ -42,6 +42,27 @@ public class PosedProtosTest {
     private Geoid geoid;
 
     @Test
+    public void testDecodeQuaternionNormalizes() {
+        NauticalAngles decoded = PosedProtos.decode(
+                posed.grpc.proto.Quaternion.newBuilder().setW(2).build());
+        assertThat(decoded, is(closeTo(NauticalAngles.IDENTITY, 0.000001)));
+    }
+
+    @Test
+    public void testDecodeQuaternionAcceptsZeroNorm() {
+        NauticalAngles decoded = PosedProtos.decode(posed.grpc.proto.Quaternion.getDefaultInstance());
+        assertThat(decoded, is(closeTo(NauticalAngles.IDENTITY, 0.000001)));
+    }
+
+    @Test
+    public void testDecodeQuaternionAcceptsNonFinite() {
+        PosedProtos.decode(posed.grpc.proto.Quaternion.newBuilder()
+                .setW(Double.NaN).build());
+        PosedProtos.decode(posed.grpc.proto.Quaternion.newBuilder()
+                .setW(Double.POSITIVE_INFINITY).build());
+    }
+
+    @Test
     public void testEncodeNauticalAnglesBoolean() {
         posed.grpc.proto.NauticalAngles encoded = PosedProtos.encode(
                 new NauticalAngles(0, 0, -PI / 2), true);

@@ -17,6 +17,7 @@
 package posed.grpc;
 
 import static org.hipparchus.util.FastMath.PI;
+import static org.hipparchus.util.FastMath.sqrt;
 import static org.hipparchus.util.FastMath.toDegrees;
 import static org.hipparchus.util.FastMath.toRadians;
 
@@ -38,9 +39,21 @@ import posed.grpc.proto.Spherical;
 
 final class PosedProtos {
     public static NauticalAngles decode(posed.grpc.proto.Quaternion quaternion) {
-        return new NauticalAngles(new Rotation(
-                quaternion.getW(), quaternion.getX(),
-                quaternion.getY(), quaternion.getZ(), true));
+        double w = quaternion.getW();
+        double x = quaternion.getX();
+        double y = quaternion.getY();
+        double z = quaternion.getZ();
+
+        // A quaternion with a zero norm, like one with no fields set, cannot be normalized.
+        double squaredNorm = w * w + x * x + y * y + z * z;
+        if (squaredNorm != 0) {
+            double inv = 1 / sqrt(squaredNorm);
+            w *= inv;
+            x *= inv;
+            y *= inv;
+            z *= inv;
+        }
+        return new NauticalAngles(new Rotation(w, x, y, z, false));
     }
 
     public static posed.grpc.proto.Quaternion encode(Rotation rotation) {

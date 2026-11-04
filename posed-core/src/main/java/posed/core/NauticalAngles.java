@@ -17,7 +17,6 @@
 package posed.core;
 
 import static org.hipparchus.util.FastMath.PI;
-import static org.hipparchus.util.FastMath.atan;
 import static org.hipparchus.util.FastMath.atan2;
 import static org.hipparchus.util.FastMath.copySign;
 import static org.hipparchus.util.FastMath.sqrt;
@@ -131,7 +130,7 @@ public final class NauticalAngles {
         double t = xx * xx + xy * xy; // cos(theta)^2
         double yz = 2 * (y * z + w * x); // z of y'
 
-        pitch = atan(xz / sqrt(t));
+        pitch = atan2(xz, sqrt(t));
         if (t > polarThreshold) {
             roll = atan2(yz, t1 - t0);
             yaw = atan2(xy, xx);

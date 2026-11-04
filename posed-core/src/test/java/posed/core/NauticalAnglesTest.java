@@ -63,6 +63,14 @@ public class NauticalAnglesTest {
     }
 
     @Test
+    public void testZeroQuaternion() {
+        NauticalAngles a = new NauticalAngles(new Rotation(0, 0, 0, 0, false));
+        assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getPitch(), is(closeTo(0.0, ANGLE_ERROR)));
+        assertThat(a.getYaw(), is(closeTo(0.0, ANGLE_ERROR)));
+    }
+
+    @Test
     public void testGimbalLockUp() {
         NauticalAngles a = new NauticalAngles(new Rotation(0.5, -0.5, 0.5, 0.5, true));
         assertThat(a.getRoll(), is(closeTo(0.0, ANGLE_ERROR)));
