@@ -219,6 +219,13 @@ public abstract class AbstractFrameTreeTest {
     }
 
     @Test
+    public void testFindRootOfTreeRoot() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        assertThat(tree.findRoot("GCRF"), is(nullValue()));
+    }
+
+    @Test
     public void testSubgraph() {
         FrameTree tree = newFrameTree(FramesFactory.getGCRF());
         tree.createRoot("A");
@@ -239,6 +246,14 @@ public abstract class AbstractFrameTreeTest {
         tree.create("A", "B", Pose.IDENTITY);
         tree.create("B", "C", Pose.IDENTITY);
         assertThat(ImmutableList.copyOf(tree.subgraph("D")).isEmpty(),
+                is(equalTo(true)));
+    }
+
+    @Test
+    public void testSubgraphOfTreeRoot() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        assertThat(ImmutableList.copyOf(tree.subgraph("GCRF")).isEmpty(),
                 is(equalTo(true)));
     }
 }

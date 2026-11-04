@@ -111,7 +111,8 @@ public interface FrameTree {
      * attached to the root frame of the frame tree.
      *
      * @param target a frame in the frame tree
-     * @return the root of the subgraph
+     * @return the root of the subgraph, or {@code null} if the target is not in
+     *     the frame tree or is the root frame of the frame tree
      */
     Frame findRoot(String target);
 
@@ -123,7 +124,8 @@ public interface FrameTree {
      * attached to the root frame of the frame tree.
      *
      * @param target a frame in the frame tree
-     * @return an iterable of frames for the subgraph
+     * @return an iterable of frames for the subgraph, which is empty if the
+     *     target is not in the frame tree or is the root frame of the frame tree
      */
     Iterable<Frame> subgraph(String target);
 }

@@ -16,6 +16,7 @@
 
 package posed.core;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -244,12 +245,16 @@ public class PoseService {
      *
      * @param name name of the frame to update
      * @param pose pose of the given frame
+     * @throws IllegalArgumentException if the frame is not defined or is the
+     *     geodetic body frame
      */
     public final void update(String name, GeodeticPose pose) {
         FrameTree treeCopy = new CopyOnWriteFrameTree(tree.getDelegate());
 
         // Updates are always done to the frame that is attached to GCRF.
         Frame frame = treeCopy.get(name);
+        checkArgument(frame != null, "undefined frame");
+        checkArgument(frame != bodyFrame, "unable to update the geodetic body frame");
         if (frame.getParent() == bodyFrame) {
             create(bodyFrame.getName(), name,
                     GeodeticFrames.makeTransform(referenceEllipsoid, pose));

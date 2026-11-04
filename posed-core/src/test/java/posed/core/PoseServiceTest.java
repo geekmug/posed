@@ -26,6 +26,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.oneOf;
 import static org.hipparchus.util.FastMath.toRadians;
+import static org.junit.Assert.assertThrows;
 import static posed.core.PosedMatchers.closeTo;
 
 import java.time.Duration;
@@ -347,6 +348,20 @@ public class PoseServiceTest {
         })
         .thenCancel()
         .verify();
+    }
+
+    @Test
+    public void testUpdateUnknownFrame() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            poseService.update("unknown", TEST_POSE);
+        });
+    }
+
+    @Test
+    public void testUpdateBodyFrame() {
+        assertThrows(IllegalArgumentException.class, () -> {
+            poseService.update("GCRF", TEST_POSE);
+        });
     }
 
     @Test

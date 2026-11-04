@@ -85,7 +85,7 @@ public final class SynchronizedFrameTree implements FrameTree {
 
     private Frame findRoot0(String target) {
         Frame targetFrame = frames.get(target);
-        if (targetFrame == null) {
+        if (targetFrame == null || targetFrame == root) {
             return null;
         }
         // Walk up the graph to find the root of this subgraph for traversal.

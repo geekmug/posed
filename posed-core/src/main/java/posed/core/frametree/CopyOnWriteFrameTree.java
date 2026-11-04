@@ -294,7 +294,7 @@ public final class CopyOnWriteFrameTree implements FrameTree {
 
     private Frame findRoot0(State state, String target) {
         Frame targetFrame = state.frames.get(target);
-        if (targetFrame == null) {
+        if (targetFrame == null || targetFrame == state.root) {
             return null;
         }
         // Walk up the graph to find the root of this subgraph for traversal.

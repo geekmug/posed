@@ -250,6 +250,8 @@ public class PoseGrpcService extends PoseServiceImplBase {
     public final void update(UpdateRequest request,
             StreamObserver<UpdateReply> responseObserver) {
         try {
+            checkArgument(!request.getFrame().isEmpty(), "no frame specified");
+
             poseService.update(request.getFrame(),
                     PosedProtos.decode(geoid, request.getGeopose()));
             GeodeticPose actual =
