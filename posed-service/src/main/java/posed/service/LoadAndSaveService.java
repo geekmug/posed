@@ -16,7 +16,9 @@
 
 package posed.service;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static org.hipparchus.util.FastMath.sqrt;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -49,6 +51,7 @@ import org.springframework.scheduling.support.CronExpression;
 import org.springframework.stereotype.Service;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.error.YAMLException;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -61,7 +64,8 @@ import posed.core.UnknownTransformProvider;
  * Loads and (periodically) saves the state of the PoseService.
  *
  * <p>The state is always loaded on startup if the file exists. The state is
- * only saved, periodically and on shutdown, if a valid cron expression is given.
+ * only saved, periodically and on shutdown, if a valid cron expression is given
+ * and the file did not have any problems when it was loaded.
  */
 @Service
 public class LoadAndSaveService implements InitializingBean, DisposableBean {
@@ -71,6 +75,7 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
     private final Path filename;
     private final Path workFilename;
     private final boolean autosave;
+    private volatile boolean saveFileHasProblems;
 
     /**
      * Creates a LoadAndSaveService instance.
@@ -104,74 +109,50 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         }
     }
 
-    private Double loadDouble(Object value) {
-        if (value == null) {
-            return null;
-        } else if (!(value instanceof Double)) {
-            LOG.warn("unexpected value in save file while loading double: {}", value);
-            return null;
-        }
-        return (Double) value;
+    private static double loadDouble(Map<?, ?> values, String key) {
+        Object value = values.get(key);
+        checkArgument(value instanceof Number, "expected %s to be a number: %s", key, value);
+        return ((Number) value).doubleValue();
     }
 
-    private Vector3D loadPosition(Object value) {
+    private static Vector3D loadPosition(Object value) {
         if (value == null) {
             return null;
-        } else if (!(value instanceof Map)) {
-            LOG.warn("unexpected value in save file while loading position: {}", value);
-            return null;
         }
+        checkArgument(value instanceof Map, "expected position to be a map: %s", value);
+        Map<?, ?> values = (Map<?, ?>) value;
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> values = (Map<String, Object>) value;
-
-        Double x = loadDouble(values.get("x"));
-        Double y = loadDouble(values.get("y"));
-        Double z = loadDouble(values.get("z"));
-
-        if (x != null && y != null && z != null) {
-            return new Vector3D(x, y, z);
-        } else {
-            LOG.warn("unexpected value in save file while loading position: {}", value);
-            return null;
-        }
+        return new Vector3D(
+                loadDouble(values, "x"),
+                loadDouble(values, "y"),
+                loadDouble(values, "z"));
     }
 
-    private Rotation loadRotation(Object value) {
+    private static Rotation loadRotation(Object value) {
         if (value == null) {
             return null;
-        } else if (!(value instanceof Map)) {
-            LOG.warn("unexpected value in save file while loading rotation: {}", value);
-            return null;
         }
+        checkArgument(value instanceof Map, "expected rotation to be a map: %s", value);
+        Map<?, ?> values = (Map<?, ?>) value;
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> values = (Map<String, Object>) value;
+        double w = loadDouble(values, "w");
+        double x = loadDouble(values, "x");
+        double y = loadDouble(values, "y");
+        double z = loadDouble(values, "z");
 
-        Double w = loadDouble(values.get("w"));
-        Double x = loadDouble(values.get("x"));
-        Double y = loadDouble(values.get("y"));
-        Double z = loadDouble(values.get("z"));
-
-        if (x != null && y != null && z != null) {
-            return new Rotation(w, x, y, z, true);
-        } else {
-            LOG.warn("unexpected value in save file while loading rotation: {}", value);
-            return null;
+        // A quaternion with a zero norm cannot be normalized.
+        double squaredNorm = w * w + x * x + y * y + z * z;
+        if (squaredNorm != 0) {
+            double inv = 1 / sqrt(squaredNorm);
+            w *= inv;
+            x *= inv;
+            y *= inv;
+            z *= inv;
         }
+        return new Rotation(w, x, y, z, false);
     }
 
-    private Transform loadTrasnform(Object value) {
-        if (value == null) {
-            return null;
-        } else if (!(value instanceof Map)) {
-            LOG.warn("unexpected value in save file while loading transform: {}", value);
-            return null;
-        }
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> values = (Map<String, Object>) value;
-
+    private static Transform loadTransform(Map<?, ?> values) {
         Vector3D position = loadPosition(values.get("position"));
         Rotation rotation = loadRotation(values.get("rotation"));
 
@@ -191,45 +172,62 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         return xfrm;
     }
 
-    private void loadFrame(String parent, String name, Object value) {
+    /**
+     * Loads a frame and its children, skipping anything that cannot be loaded.
+     * @param parent name of the parent frame
+     * @param name name of the frame
+     * @param value contents of the save file for the frame
+     * @return whether everything was loaded
+     */
+    private boolean loadFrame(String parent, String name, Object value) {
         if (value == null) {
-            return;
-        } else if (!(value instanceof Map)) {
-            LOG.warn("unexpected value in save file while loading frame: {}", value);
-            return;
+            return true;
         }
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> values = (Map<String, Object>) value;
+        Object children;
+        try {
+            checkArgument(value instanceof Map, "expected frame to be a map: %s", value);
+            Map<?, ?> values = (Map<?, ?>) value;
 
-        Transform xfrm = loadTrasnform(values);
-        if (xfrm == null) {
-            poseService.create(parent, name, UnknownTransformProvider.INSTANCE);
-        } else {
-            poseService.create(parent, name, xfrm);
-        }
-
-        Object childrenObject = values.get("children");
-        if (childrenObject == null) {
-            return;
-        } else if (!(childrenObject instanceof Map)) {
-            LOG.warn("unexpected value in save file while loading frame children: {}", childrenObject);
-            return;
-        } else {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> children = (Map<String, Object>) childrenObject;
-            for (Map.Entry<String, Object> child : children.entrySet()) {
-                loadFrame(name, child.getKey(), child.getValue());
+            Transform xfrm = loadTransform(values);
+            if (xfrm == null) {
+                poseService.create(parent, name, UnknownTransformProvider.INSTANCE);
+            } else {
+                poseService.create(parent, name, xfrm);
             }
+            children = values.get("children");
+        } catch (RuntimeException e) {
+            LOG.warn("skipping frame in save file and its children: {}", name, e);
+            return false;
         }
+
+        if (children == null) {
+            return true;
+        } else if (!(children instanceof Map)) {
+            LOG.warn("skipping children of frame in save file: {}: {}", name, children);
+            return false;
+        }
+
+        boolean complete = true;
+        for (Map.Entry<?, ?> child : ((Map<?, ?>) children).entrySet()) {
+            complete &= loadFrame(name, String.valueOf(child.getKey()), child.getValue());
+        }
+        return complete;
     }
 
-    /** Loads frames from the saved file into the PoseService. */
-    @SuppressWarnings("unchecked")
+    /**
+     * Loads frames from the saved file into the PoseService.
+     *
+     * <p>Problems with the file do not prevent startup. Anything that cannot
+     * be loaded is logged and skipped, and the file is left as it is by not
+     * saving over it, because that would lose the parts that were skipped.
+     */
     public final void load() {
         LOG.info("Loading pose service state...");
 
-        Map<String, Object> roots = null;
+        saveFileHasProblems = false;
+
+        Map<?, ?> roots;
 
         Yaml yaml = new Yaml();
         try (Reader reader = Files.newBufferedReader(filename, StandardCharsets.UTF_8)) {
@@ -237,24 +235,43 @@ public class LoadAndSaveService implements InitializingBean, DisposableBean {
         } catch (NoSuchFileException e) {
             LOG.info("no save file to load: {}", filename);
             return;
-        } catch (IOException e) {
+        } catch (IOException | YAMLException e) {
             LOG.warn("failed to load save file", e);
+            saveFileHasProblems = true;
             return;
         }
 
-        if (roots != null) {
-            String bodyFrame = poseService.getReferenceEllipsoid().getBodyFrame().getName();
-            for (Map.Entry<String, Object> root : roots.entrySet()) {
-                poseService.createRoot(root.getKey());
-                loadFrame(bodyFrame, root.getKey(), root.getValue());
+        if (roots == null) {
+            return;
+        }
+
+        boolean complete = true;
+        String bodyFrame = poseService.getReferenceEllipsoid().getBodyFrame().getName();
+        for (Map.Entry<?, ?> root : roots.entrySet()) {
+            String name = String.valueOf(root.getKey());
+            try {
+                poseService.createRoot(name);
+                complete &= loadFrame(bodyFrame, name, root.getValue());
+            } catch (IllegalArgumentException e) {
+                LOG.warn("skipping root frame in save file and its children: {}", name, e);
+                complete = false;
             }
         }
+        saveFileHasProblems = !complete;
     }
 
-    /** Saves frames to the saved file from the PoseService. */
+    /**
+     * Saves frames to the saved file from the PoseService, unless the file had
+     * problems when it was loaded.
+     */
     @Scheduled(cron = "${posed.save.cron}")
     @SuppressWarnings("unchecked")
     public final void save() {
+        if (saveFileHasProblems) {
+            LOG.warn("not saving over a save file that had problems: {}", filename);
+            return;
+        }
+
         LOG.info("Saving pose service state...");
 
         Iterator<Frame> traversal = poseService.traverse().iterator();
