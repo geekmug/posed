@@ -22,11 +22,14 @@ import org.orekit.frames.Frame;
 import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Iterables;
 
 import posed.core.Pose;
+import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
+import reactor.util.concurrent.Queues;
 
 /**
  * A proxy class that allows tracking changes to the {@code FrameTree}.
@@ -63,7 +66,7 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
     }
 
     private final Object changeMonitor = new Object();
-    private final Sinks.Many<Change> changeSink = Sinks.many().multicast().onBackpressureBuffer();
+    private final Sinks.Many<Change> changeSink = Sinks.many().multicast().directBestEffort();
     private final T delegate;
 
     /**
@@ -88,17 +91,33 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
      * <p>The produced stream is based on <em>potential</em> updates and may
      * produce updates that have no apparent change.
      *
+     * <p>Each subscription starts with a creation for every frame that exists
+     * at the time of subscribing, followed by every change after that.
+     *
+     * <p>Each subscriber is buffered independently, so a slow subscriber does
+     * not delay any others. The buffer holds the initial frames and at least as
+     * many changes again. A subscriber that falls too far behind stops receiving
+     * new changes and, after it has consumed the changes that were buffered,
+     * gets an overflow error. It can then subscribe again to get the current
+     * frames.
+     *
      * @return a stream of {@code Change}s for this {@code FrameTree}
      */
     public Flux<Change> getChangeStream() {
-        synchronized (changeMonitor) {
-            // Emit a creates for all available frames and then track changes.
-            ImmutableList<Frame> frames = ImmutableList.copyOf(delegate.traverse());
-            return Flux.concat(
-                    Flux.fromStream(frames.stream()
-                            .map(frame -> new Created(frame))),
-                    changeSink.asFlux());
-        }
+        return Flux.defer(() -> {
+            int bufferSize = Math.max(Queues.SMALL_BUFFER_SIZE, 2 * Iterables.size(delegate.traverse()));
+            return Flux.<Change>create(emitter -> {
+                synchronized (changeMonitor) {
+                    emitter.onDispose(changeSink.asFlux().subscribe(emitter::next));
+                    delegate.traverse().forEach(frame -> emitter.next(new Created(frame)));
+                }
+            }).onBackpressureBuffer(bufferSize, BufferOverflowStrategy.ERROR);
+        });
+    }
+
+    @VisibleForTesting
+    int getSubscriberCount() {
+        return changeSink.currentSubscriberCount();
     }
 
     private void emitCreates(String name) {
