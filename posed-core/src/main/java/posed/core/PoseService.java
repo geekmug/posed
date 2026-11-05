@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import org.orekit.errors.OrekitException;
 import org.orekit.frames.FixedTransformProvider;
@@ -47,6 +48,18 @@ import reactor.core.scheduler.Schedulers;
 /** Service instance for managing poses. */
 @Service
 public class PoseService {
+    /** The updates for a frame and how many subscribers are using them. */
+    private static final class UpdateSink {
+        private final String name;
+        private final Sinks.Many<Boolean> sink = Sinks.many().replay().latest();
+        // Only accessed while updating the entry in updateSinks.
+        private int subscribers;
+
+        UpdateSink(final String name) {
+            this.name = name;
+        }
+    }
+
     /**
      * Merge data from {@link Publisher} sequences contained in an array / vararg
      * into an interleaved merged sequence. Unlike {@link Flux#concat(Publisher) concat},
@@ -80,8 +93,7 @@ public class PoseService {
         });
     }
 
-    private final ConcurrentHashMap<String, Sinks.Many<Boolean>> updateSinks =
-            new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, UpdateSink> updateSinks = new ConcurrentHashMap<>();
     private final ReferenceEllipsoid referenceEllipsoid;
     private final Frame bodyFrame;
     private final ChangeTrackingFrameTree<CopyOnWriteFrameTree> tree;
@@ -102,16 +114,16 @@ public class PoseService {
     private void handleChangeStream(Change change) {
         if (change instanceof ChangeTrackingFrameTree.Created) {
             Frame frame = ((ChangeTrackingFrameTree.Created) change).getFrame();
-            Sinks.Many<Boolean> sink = updateSinks.get(frame.getName());
-            if (sink != null) {
-                sink.tryEmitNext(Boolean.TRUE);
+            UpdateSink updates = updateSinks.get(frame.getName());
+            if (updates != null) {
+                updates.sink.tryEmitNext(Boolean.TRUE);
             }
         } else {
             String name = ((ChangeTrackingFrameTree.Removed) change).getName();
             // A completed sink is of no use to a frame later created with this name.
-            Sinks.Many<Boolean> sink = updateSinks.remove(name);
-            if (sink != null) {
-                sink.tryEmitComplete();
+            UpdateSink updates = updateSinks.remove(name);
+            if (updates != null) {
+                updates.sink.tryEmitComplete();
             }
         }
     }
@@ -303,12 +315,49 @@ public class PoseService {
         }
     }
 
-    private Flux<Boolean> getOrMakeUpdateProcessor(String name) {
-        return updateSinks.computeIfAbsent(name,
-                frameName -> Sinks.many().replay().latest())
-                .asFlux()
-                .subscribeOn(Schedulers.boundedElastic())
-                .hide();
+    @VisibleForTesting
+    final int getUpdateSinkCount() {
+        return updateSinks.size();
+    }
+
+    private UpdateSink acquireUpdateSink(String name) {
+        return updateSinks.compute(name, (key, existing) -> {
+            UpdateSink updates = existing == null ? new UpdateSink(key) : existing;
+            updates.subscribers++;
+            return updates;
+        });
+    }
+
+    private void releaseUpdateSink(UpdateSink updates) {
+        updateSinks.computeIfPresent(updates.name, (key, current) -> {
+            // After a frame is removed, this name may belong to a different sink.
+            if (current != updates) {
+                return current;
+            }
+            updates.subscribers--;
+            return updates.subscribers == 0 ? null : updates;
+        });
+    }
+
+    /**
+     * Creates a stream that needs the updates for a frame, which are only
+     * tracked while the stream is subscribed.
+     *
+     * <p>The stream is created after updates start being tracked, so if it
+     * starts with the current value, then no update can be missed after that.
+     *
+     * @param <T> type of the stream
+     * @param name name of the frame
+     * @param stream function for creating the stream from the updates for the frame
+     * @return the created stream
+     */
+    private <T> Flux<T> withUpdates(String name, Function<Flux<Boolean>, Flux<T>> stream) {
+        return Flux.using(
+                () -> acquireUpdateSink(name),
+                updates -> stream.apply(updates.sink.asFlux()
+                        .subscribeOn(Schedulers.boundedElastic())
+                        .hide()),
+                this::releaseUpdateSink);
     }
 
     /**
@@ -325,11 +374,10 @@ public class PoseService {
         checkNotNull(pose);
 
         // Return the current transform, then any updates.
-        return Flux.just(transform(src, dst, pose)).concatWith(
-                mergeWithEarlyExit(
-                        getOrMakeUpdateProcessor(src),
-                        getOrMakeUpdateProcessor(dst))
-                .map(v -> transform(src, dst, pose)));
+        return withUpdates(src, srcUpdates -> withUpdates(dst, dstUpdates ->
+                Flux.just(transform(src, dst, pose)).concatWith(
+                        mergeWithEarlyExit(srcUpdates, dstUpdates)
+                        .map(v -> transform(src, dst, pose)))));
     }
 
     /**
@@ -365,10 +413,9 @@ public class PoseService {
         checkNotNull(pose);
 
         // Return the current conversion, then any updates.
-        return Flux.just(convert(name, pose)).concatWith(
-                getOrMakeUpdateProcessor(name).map(v -> {
-                    return convert(name, pose);
-                }));
+        return withUpdates(name, updates ->
+                Flux.just(convert(name, pose)).concatWith(
+                        updates.map(v -> convert(name, pose))));
     }
 
     /**
@@ -404,9 +451,8 @@ public class PoseService {
         checkNotNull(geopose);
 
         // Return the current conversion, then any updates.
-        return Flux.just(convert(name, geopose)).concatWith(
-                getOrMakeUpdateProcessor(name).map(v -> {
-                    return convert(name, geopose);
-                }));
+        return withUpdates(name, updates ->
+                Flux.just(convert(name, geopose)).concatWith(
+                        updates.map(v -> convert(name, geopose))));
     }
 }

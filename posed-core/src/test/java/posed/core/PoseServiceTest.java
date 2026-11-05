@@ -40,6 +40,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.orekit.bodies.GeodeticPoint;
 import org.orekit.frames.Frame;
+import org.reactivestreams.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.annotation.DirtiesContext.ClassMode;
@@ -52,6 +53,9 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Streams;
 
 import posed.core.frametree.ChangeTrackingFrameTree;
+import reactor.core.Disposable;
+import reactor.core.publisher.BaseSubscriber;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
@@ -438,6 +442,107 @@ public class PoseServiceTest {
                 }
             }
         }
+    }
+
+    @Test
+    public void testStreamThatIsNeverSubscribedDoesNotTrackUpdates() {
+        Flux<Optional<GeodeticPose>> stream = poseService.convertStream("unknown", Pose.IDENTITY);
+        assertThat(stream, is(not(nullValue())));
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(0)));
+    }
+
+    @Test
+    public void testCancellingStreamsStopsTrackingUpdates() {
+        Disposable convert = poseService.convertStream("unknown", Pose.IDENTITY).subscribe();
+        Disposable transform = poseService.transformStream(
+                "unknown", "other", Pose.IDENTITY).subscribe();
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(2)));
+
+        convert.dispose();
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(2)));
+
+        transform.dispose();
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(0)));
+    }
+
+    @Test
+    public void testRemovingFrameStopsTrackingUpdates() {
+        Disposable stream = poseService.convertStream("below", Pose.IDENTITY).subscribe();
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(1)));
+
+        poseService.remove("below");
+
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(0)));
+        stream.dispose();
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(0)));
+    }
+
+    @Test
+    public void testCancellingStreamDoesNotAffectOtherStreamOfFrame() {
+        Disposable other = poseService.convertStream("below", Pose.IDENTITY).subscribe();
+
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("below", Pose.IDENTITY))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .then(other::dispose)
+        .then(() -> poseService.update("root", TEST_POSE))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify(Duration.ofSeconds(5));
+
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(0)));
+    }
+
+    @Test
+    public void testCancellingStreamOfRemovedFrameDoesNotAffectRecreatedFrame() {
+        // This subscriber never requests anything, so it outlives the removal of the frame.
+        BaseSubscriber<Optional<GeodeticPose>> stale =
+                new BaseSubscriber<Optional<GeodeticPose>>() {
+            @Override
+            protected void hookOnSubscribe(Subscription subscription) {
+                // Do not request anything.
+            }
+        };
+        poseService.convertStream("below", Pose.IDENTITY).subscribe(stale);
+
+        poseService.remove("below");
+        poseService.create("root", "below",
+                new Pose(new Vector3D(0, 0, 1), NauticalAngles.IDENTITY));
+
+        StepVerifier.withVirtualTime(
+                () -> poseService.convertStream("below", Pose.IDENTITY))
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(false)));
+        })
+        .then(stale::dispose)
+        .then(() -> poseService.update("root", TEST_POSE))
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify(Duration.ofSeconds(5));
+
+        assertThat(poseService.getUpdateSinkCount(), is(equalTo(0)));
+    }
+
+    @Test
+    public void testStreamStartsWithValueAtTimeOfSubscribing() {
+        Flux<Optional<Pose>> stream = poseService.convertStream("below", TEST_POSE);
+        poseService.update("root", TEST_POSE);
+
+        StepVerifier.withVirtualTime(() -> stream)
+        .expectSubscription()
+        .assertNext(maybePose -> {
+            assertThat(maybePose.isPresent(), is(equalTo(true)));
+        })
+        .thenCancel()
+        .verify(Duration.ofSeconds(5));
     }
 
     @Test
