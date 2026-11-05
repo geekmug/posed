@@ -18,16 +18,24 @@ package posed.grpc;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.closeTo;
+import static org.hamcrest.Matchers.lessThan;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -44,6 +52,11 @@ import com.linecorp.armeria.client.grpc.GrpcClients;
 import com.linecorp.armeria.server.Server;
 import com.linecorp.armeria.server.grpc.GrpcService;
 
+import io.grpc.ForwardingServerCall.SimpleForwardingServerCall;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
 import io.grpc.stub.ClientCallStreamObserver;
 import io.grpc.stub.ClientResponseObserver;
 import io.grpc.stub.ServerCallStreamObserver;
@@ -83,6 +96,11 @@ public class PoseGrpcServiceTest {
             .setDstFrame("other")
             .setPose(POSE)
             .build();
+    private static final TransformRequest CHILD_TRANSFORM = TransformRequest.newBuilder()
+            .setSrcFrame("child")
+            .setDstFrame("test")
+            .setPose(POSE)
+            .build();
 
     /** A client that disconnects as soon as it gets a reply. */
     private static final class CancelOnFirstReply
@@ -110,6 +128,68 @@ public class PoseGrpcServiceTest {
         }
     }
 
+    /** A client that only reads a single reply until it is told to read the rest. */
+    private static final class SlowClient
+            implements ClientResponseObserver<TransformRequest, TransformReply> {
+        private final CountDownLatch gotFirstReply = new CountDownLatch(1);
+        private final CountDownLatch gotLastReply = new CountDownLatch(1);
+        private final double lastPosition;
+        private ClientCallStreamObserver<TransformRequest> requestStream;
+
+        SlowClient(final double lastPosition) {
+            this.lastPosition = lastPosition;
+        }
+
+        void readRemainingReplies() {
+            requestStream.request(Integer.MAX_VALUE);
+        }
+
+        void disconnect() {
+            requestStream.cancel("disconnecting", null);
+        }
+
+        @Override
+        public void beforeStart(ClientCallStreamObserver<TransformRequest> stream) {
+            requestStream = stream;
+            stream.disableAutoRequestWithInitial(1);
+        }
+
+        @Override
+        public void onNext(TransformReply reply) {
+            gotFirstReply.countDown();
+            if (Double.compare(reply.getPose().getCartesian().getX(), lastPosition) == 0) {
+                gotLastReply.countDown();
+            }
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            // The call fails because it was cancelled.
+        }
+
+        @Override
+        public void onCompleted() {
+            // The call is only ever cancelled.
+        }
+    }
+
+    /** Counts the replies that a server gives to the underlying transport. */
+    private static final class ReplyCounter implements ServerInterceptor {
+        private final AtomicInteger count = new AtomicInteger();
+
+        @Override
+        public <Q, A> ServerCall.Listener<Q> interceptCall(ServerCall<Q, A> call,
+                Metadata headers, ServerCallHandler<Q, A> next) {
+            return next.startCall(new SimpleForwardingServerCall<Q, A>(call) {
+                @Override
+                public void sendMessage(A message) {
+                    count.incrementAndGet();
+                    super.sendMessage(message);
+                }
+            }, headers);
+        }
+    }
+
     @Autowired
     private ReferenceEllipsoid referenceEllipsoid;
     @Autowired
@@ -118,9 +198,36 @@ public class PoseGrpcServiceTest {
     private PoseService poseService;
     private PoseGrpcService service;
 
-    @SuppressWarnings("unchecked")
     private static <T> ServerCallStreamObserver<T> mockObserver() {
-        return mock(ServerCallStreamObserver.class);
+        return mockObserver(new AtomicBoolean(true));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> ServerCallStreamObserver<T> mockObserver(AtomicBoolean ready) {
+        ServerCallStreamObserver<T> observer = mock(ServerCallStreamObserver.class);
+        when(observer.isReady()).thenAnswer(invocation -> ready.get());
+        return observer;
+    }
+
+    private static Server startServer(GrpcService grpcService) {
+        Server server = Server.builder()
+                .gracefulShutdownTimeoutMillis(0, 0)
+                .requestTimeoutMillis(0)
+                .service(grpcService)
+                .build();
+        server.start().join();
+        return server;
+    }
+
+    private static PoseServiceGrpc.PoseServiceStub newClient(Server server) {
+        return GrpcClients.builder("gproto+h2c://127.0.0.1:" + server.activeLocalPort() + "/")
+                .responseTimeoutMillis(0)
+                .build(PoseServiceGrpc.PoseServiceStub.class);
+    }
+
+    private void moveChild(double position) {
+        poseService.create("test", "child", new Pose(
+                new Vector3D(position, 0, 0), posed.core.NauticalAngles.IDENTITY));
     }
 
     @Before
@@ -181,21 +288,72 @@ public class PoseGrpcServiceTest {
             }
         };
 
-        Server server = Server.builder()
-                .service(GrpcService.builder()
-                        .addService(new PoseGrpcService(spiedPoseService, geoid))
-                        .build())
-                .build();
-        server.start().join();
+        Server server = startServer(GrpcService.builder()
+                .addService(new PoseGrpcService(spiedPoseService, geoid))
+                .build());
         try {
-            int port = server.activeLocalPort();
-            GrpcClients.newClient("gproto+h2c://127.0.0.1:" + port + "/",
-                    PoseServiceGrpc.PoseServiceStub.class)
-            .transformStream(TRANSFORM, new CancelOnFirstReply());
+            newClient(server).transformStream(TRANSFORM, new CancelOnFirstReply());
 
             // No frames change, so only the disconnect can cancel the stream.
             assertThat(cancelled.await(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS), is(true));
         } finally {
+            server.stop().join();
+        }
+    }
+
+    @Test
+    public void testClientThatIsNotReadyOnlyGetsLatestValueOnceReady() throws Exception {
+        int updates = 100;
+        moveChild(0);
+        AtomicBoolean ready = new AtomicBoolean();
+        ServerCallStreamObserver<TransformReply> observer = mockObserver(ready);
+        service.transformStream(CHILD_TRANSFORM, observer);
+
+        for (int i = 1; i <= updates; i++) {
+            moveChild(i);
+        }
+        verify(observer, after(QUIET_MILLIS).never()).onNext(any());
+
+        ArgumentCaptor<Runnable> onReady = ArgumentCaptor.forClass(Runnable.class);
+        verify(observer).setOnReadyHandler(onReady.capture());
+        ready.set(true);
+        onReady.getValue().run();
+
+        Thread.sleep(QUIET_MILLIS);
+        ArgumentCaptor<TransformReply> replies = ArgumentCaptor.forClass(TransformReply.class);
+        verify(observer, atLeastOnce()).onNext(replies.capture());
+        List<TransformReply> sent = replies.getAllValues();
+        assertThat(sent.size(), is(lessThan(updates)));
+        assertThat(sent.get(sent.size() - 1).getPose().getCartesian().getX(),
+                is(closeTo(updates, 0.000001)));
+    }
+
+    @Test
+    public void testClientThatStopsReadingDoesNotGetRepliesBuffered() throws Exception {
+        // These replies are far more than fit in the flow control window for the stream.
+        int updates = 20000;
+        moveChild(0);
+        ReplyCounter replyCounter = new ReplyCounter();
+        Server server = startServer(GrpcService.builder()
+                .addService(service)
+                .intercept(replyCounter)
+                .build());
+        SlowClient client = new SlowClient(updates);
+        try {
+            newClient(server).transformStream(CHILD_TRANSFORM, client);
+            assertThat(client.gotFirstReply.await(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS), is(true));
+
+            for (int i = 1; i <= updates; i++) {
+                moveChild(i);
+            }
+            Thread.sleep(QUIET_MILLIS);
+            assertThat(replyCounter.count.get(), is(lessThan(updates / 2)));
+
+            // The stream recovers, and no matter what was skipped the client ends up current.
+            client.readRemainingReplies();
+            assertThat(client.gotLastReply.await(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS), is(true));
+        } finally {
+            client.disconnect();
             server.stop().join();
         }
     }

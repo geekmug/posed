@@ -19,12 +19,14 @@ package posed.grpc;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
 import org.orekit.frames.Transform;
 import org.orekit.models.earth.Geoid;
 import org.orekit.models.earth.ReferenceEllipsoid;
 import org.orekit.time.AbsoluteDate;
+import org.reactivestreams.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -63,14 +65,60 @@ import posed.grpc.proto.TraverseReply;
 import posed.grpc.proto.TraverseRequest;
 import posed.grpc.proto.UpdateReply;
 import posed.grpc.proto.UpdateRequest;
-import reactor.core.Disposable;
-import reactor.core.Disposables;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 /** GRPC service instance for managing poses. */
 @Service
 public class PoseGrpcService extends PoseServiceImplBase {
+    /**
+     * Sends a reply for each value it receives, and only requests another value
+     * when the client is ready for another reply.
+     * @param <T> type of the values
+     * @param <R> type of the replies
+     */
+    private static final class ReplySender<T, R> extends BaseSubscriber<T> {
+        private final AtomicBoolean requested = new AtomicBoolean();
+        private final Function<T, R> toReply;
+        private final ServerCallStreamObserver<R> responseObserver;
+
+        ReplySender(final Function<T, R> toReply, final ServerCallStreamObserver<R> responseObserver) {
+            this.toReply = toReply;
+            this.responseObserver = responseObserver;
+        }
+
+        void requestIfReady() {
+            // There may be many readiness changes for each reply, so request at most one value.
+            if (responseObserver.isReady() && requested.compareAndSet(false, true)) {
+                request(1);
+            }
+        }
+
+        @Override
+        protected void hookOnSubscribe(Subscription subscription) {
+            requestIfReady();
+        }
+
+        @Override
+        protected void hookOnNext(T value) {
+            responseObserver.onNext(toReply.apply(value));
+            // If the client is not ready now, it will be told when it becomes ready.
+            requested.set(false);
+            requestIfReady();
+        }
+
+        @Override
+        protected void hookOnError(Throwable error) {
+            responseObserver.onError(Status.INTERNAL.withCause(error).asException());
+        }
+
+        @Override
+        protected void hookOnComplete() {
+            responseObserver.onCompleted();
+        }
+    }
+
     private static Throwable toGrpc(Throwable t) {
         Status status;
         if (t instanceof StatusException) {
@@ -86,7 +134,12 @@ public class PoseGrpcService extends PoseServiceImplBase {
     }
 
     /**
-     * Sends a reply for each value in a stream until the client cancels the call.
+     * Sends replies for the values in a stream until the client cancels the call.
+     *
+     * <p>Each value supersedes the previous ones, so a client that is not ready
+     * for a reply skips to the latest value when it is, rather than having
+     * replies buffered for it without limit.
+     *
      * @param <T> type of the values in the stream
      * @param <R> type of the replies
      * @param values stream of values to send
@@ -95,20 +148,17 @@ public class PoseGrpcService extends PoseServiceImplBase {
      */
     private static <T, R> void sendStream(Flux<T> values, Function<T, R> toReply,
             StreamObserver<R> responseObserver) {
-        // The handler can only be set during the initial call, which is also
-        // before a cancellation can be delivered to it.
-        Disposable.Swap subscription = Disposables.swap();
-        ((ServerCallStreamObserver<R>) responseObserver).setOnCancelHandler(subscription::dispose);
+        ServerCallStreamObserver<R> serverObserver = (ServerCallStreamObserver<R>) responseObserver;
+        ReplySender<T, R> sender = new ReplySender<>(toReply, serverObserver);
 
-        subscription.update(values
+        // The handlers can only be set during the initial call, which is also
+        // before either of them can be called.
+        serverObserver.setOnCancelHandler(sender::dispose);
+        serverObserver.setOnReadyHandler(sender::requestIfReady);
+
+        values.onBackpressureLatest()
                 .subscribeOn(Schedulers.boundedElastic())
-                .subscribe(value -> {
-                    responseObserver.onNext(toReply.apply(value));
-                }, error -> {
-                    responseObserver.onError(Status.INTERNAL.withCause(error).asException());
-                }, () -> {
-                    responseObserver.onCompleted();
-                }));
+                .subscribe(sender);
     }
 
     private final PoseService poseService;

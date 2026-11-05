@@ -136,6 +136,7 @@ project(':posed-grpc') {
     implementation group: 'org.hipparchus', name: 'hipparchus-core'
     implementation group: 'org.hipparchus', name: 'hipparchus-geometry'
     implementation group: 'org.orekit', name: 'orekit'
+    implementation group: 'org.reactivestreams', name: 'reactive-streams'
     implementation group: 'org.springframework', name: 'spring-beans'
     implementation group: 'org.springframework', name: 'spring-context'
 
