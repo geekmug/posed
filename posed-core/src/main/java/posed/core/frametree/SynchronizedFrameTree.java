@@ -136,30 +136,7 @@ public final class SynchronizedFrameTree implements FrameTree {
                 "frame exists with a different parent");
 
         if (update != null) {
-            // Rebuild the frames by traversing the graph.
-            ImmutableList<Frame> effected = ImmutableList.copyOf(
-                    Traverser.forGraph(graph).depthFirstPreOrder(update));
-            ArrayDeque<Frame> stack = new ArrayDeque<>();
-            stack.push(parent);
-            for (Frame frame : effected) {
-                parent = stack.peek();
-                while (!parent.getName().equals(frame.getParent().getName())) {
-                    stack.pop();
-                    parent = stack.peek();
-                }
-
-                TransformProvider newXfrm = frame.getTransformProvider();
-                if (frame == update) {
-                    newXfrm = xfrm;
-                }
-                Frame newFrame = new Frame(parent, newXfrm, frame.getName(),
-                        frame.isPseudoInertial());
-
-                graph.removeNode(frame);
-                frames.put(newFrame.getName(), newFrame);
-                graph.putEdge(parent, newFrame);
-                stack.push(newFrame);
-            }
+            replace(parent, update, xfrm);
         } else {
             TransformProvider newXfrm = xfrm;
             if (xfrm == null) {
@@ -170,6 +147,74 @@ public final class SynchronizedFrameTree implements FrameTree {
             frames.put(name, newFrame);
             graph.putEdge(parent, newFrame);
         }
+    }
+
+    /**
+     * Replaces a frame with one using a new transform provider, along with
+     * all of its descendants, since they refer to their parent frames.
+     * @param parent parent of the frame
+     * @param update frame to replace
+     * @param xfrm new transform provider for the frame
+     */
+    private void replace(Frame parent, Frame update, TransformProvider xfrm) {
+        // Rebuild the frames by traversing the graph.
+        ImmutableList<Frame> effected = ImmutableList.copyOf(
+                Traverser.forGraph(graph).depthFirstPreOrder(update));
+        ArrayDeque<Frame> stack = new ArrayDeque<>();
+        stack.push(parent);
+        for (Frame frame : effected) {
+            Frame newParent = stack.peek();
+            while (!newParent.getName().equals(frame.getParent().getName())) {
+                stack.pop();
+                newParent = stack.peek();
+            }
+
+            TransformProvider newXfrm = frame.getTransformProvider();
+            if (frame == update) {
+                newXfrm = xfrm;
+            }
+            Frame newFrame = new Frame(newParent, newXfrm, frame.getName(),
+                    frame.isPseudoInertial());
+
+            graph.removeNode(frame);
+            frames.put(newFrame.getName(), newFrame);
+            graph.putEdge(newParent, newFrame);
+            stack.push(newFrame);
+        }
+    }
+
+    @Override
+    public void update(String parentName, String name, TransformProvider xfrm) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+        checkNotNull(xfrm);
+
+        Frame update = frames.get(name);
+        checkArgument(update != null, "frame is not defined");
+
+        Frame parent = frames.get(parentName);
+        checkArgument(parent != null && update.getParent() == parent,
+                "frame is not attached to the given parent");
+
+        replace(parent, update, xfrm);
+    }
+
+    @Override
+    public void update(String parentName, String name, Transform xfrm) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+        checkNotNull(xfrm);
+
+        update(parentName, name, new FixedTransformProvider(xfrm));
+    }
+
+    @Override
+    public void update(String parentName, String name, Pose pose) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+        checkNotNull(pose);
+
+        update(parentName, name, Frames.makeTransform(pose));
     }
 
     @Override

@@ -152,6 +152,26 @@ public final class ReadWriteLockingFrameTree implements FrameTree {
     }
 
     @Override
+    public void update(String parentName, String name, TransformProvider xfrm) {
+        writeLock.lock();
+        try {
+            frameTree.update(parentName, name, xfrm);
+        } finally {
+            writeLock.unlock();
+        }
+    }
+
+    @Override
+    public void update(String parentName, String name, Transform xfrm) {
+        update(parentName, name, new FixedTransformProvider(xfrm));
+    }
+
+    @Override
+    public void update(String parentName, String name, Pose pose) {
+        update(parentName, name, Frames.makeTransform(pose));
+    }
+
+    @Override
     public void remove(String name) {
         writeLock.lock();
         try {

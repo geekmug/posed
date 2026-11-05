@@ -268,7 +268,7 @@ public class PoseService {
         checkArgument(frame != null, "undefined frame");
         checkArgument(frame != bodyFrame, "unable to update the geodetic body frame");
         if (frame.getParent() == bodyFrame) {
-            create(bodyFrame.getName(), name,
+            tree.update(bodyFrame.getName(), name,
                     GeodeticFrames.makeTransform(referenceEllipsoid, pose));
         } else {
             // The first frame in the subgraph iterator is always the root.
@@ -281,7 +281,7 @@ public class PoseService {
                     frame.getTransformTo(root, AbsoluteDate.PAST_INFINITY));
 
             // Update the root frame with the derived transform.
-            create(bodyFrame.getName(), root.getName(), xfrm);
+            tree.update(bodyFrame.getName(), root.getName(), xfrm);
         }
     }
 

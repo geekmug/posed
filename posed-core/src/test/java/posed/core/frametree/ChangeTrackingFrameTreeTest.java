@@ -21,13 +21,19 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Test;
 import org.orekit.frames.Frame;
 import org.orekit.frames.FramesFactory;
+import org.orekit.frames.TransformProviderUtils;
 import org.reactivestreams.Subscription;
 
+import com.google.common.collect.ImmutableList;
+
+import posed.core.Pose;
 import posed.core.frametree.ChangeTrackingFrameTree.Change;
 import reactor.core.Disposable;
 import reactor.core.Exceptions;
@@ -73,6 +79,20 @@ public class ChangeTrackingFrameTreeTest extends AbstractFrameTreeTest {
 
         // The subscriber gets the initial frame and the frame that was created.
         assertThat(received.get(), is(equalTo(2)));
+    }
+
+    @Test
+    public void testUpdateEmitsCreatedForFrameAndDescendants() {
+        ChangeTrackingFrameTree<?> tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+
+        List<String> created = new ArrayList<>();
+        tree.getChangeStream().skip(3).subscribe(change ->
+                created.add(((ChangeTrackingFrameTree.Created) change).getFrame().getName()));
+        tree.update("GCRF", "A", TransformProviderUtils.IDENTITY_PROVIDER);
+
+        assertThat(created, is(equalTo(ImmutableList.of("A", "B"))));
     }
 
     @Test

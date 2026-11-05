@@ -31,6 +31,8 @@ import static posed.core.PosedMatchers.closeTo;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -40,6 +42,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.orekit.bodies.GeodeticPoint;
 import org.orekit.frames.Frame;
+import org.orekit.models.earth.ReferenceEllipsoid;
 import org.reactivestreams.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.annotation.DirtiesContext;
@@ -66,6 +69,7 @@ public class PoseServiceTest {
     // Acceptable amount of error in geospatial calculations:
     private static final double ANGLE_ERROR = toRadians(0.0000001);
     private static final double POSITION_ERROR = 0.0000001;
+    private static final long TIMEOUT_MILLIS = 5000;
 
     private static final GeodeticPoint NULL_POSITION = new GeodeticPoint(0, 0, 0);
     private static final GeodeticPoint TEST_POSITION = new GeodeticPoint(
@@ -366,6 +370,52 @@ public class PoseServiceTest {
         assertThrows(IllegalArgumentException.class, () -> {
             poseService.update("GCRF", TEST_POSE);
         });
+    }
+
+    @Test
+    public void testUpdateDoesNotRecreateFrameRemovedConcurrently() throws Exception {
+        CountDownLatch updating = new CountDownLatch(1);
+        CountDownLatch removed = new CountDownLatch(1);
+        ReferenceEllipsoid wgs84 = poseService.getReferenceEllipsoid();
+        // Pauses an update after it has found the frame, but before it has changed it.
+        PoseService service = new PoseService(new ReferenceEllipsoid(
+                wgs84.getEquatorialRadius(), wgs84.getFlattening(), wgs84.getBodyFrame(),
+                wgs84.getGM(), wgs84.getSpin()) {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public Vector3D transform(GeodeticPoint point) {
+                updating.countDown();
+                try {
+                    // Let a concurrent remove finish first.
+                    removed.await(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return super.transform(point);
+            }
+        });
+        service.createRoot("frame");
+
+        Thread remover = new Thread(() -> {
+            try {
+                if (updating.await(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+                    service.remove("frame");
+                    removed.countDown();
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        });
+        remover.start();
+        // The frame was removed while it was being updated, so it no longer exists to update.
+        assertThrows(IllegalArgumentException.class, () -> {
+            service.update("frame", TEST_POSE);
+        });
+        remover.join(TIMEOUT_MILLIS);
+
+        assertThat(removed.getCount(), is(equalTo(0L)));
+        assertThat(service.convert("frame", Pose.IDENTITY).isPresent(), is(equalTo(false)));
     }
 
     @Test

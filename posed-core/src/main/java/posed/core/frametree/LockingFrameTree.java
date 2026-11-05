@@ -137,6 +137,26 @@ public final class LockingFrameTree implements FrameTree {
     }
 
     @Override
+    public void update(String parentName, String name, TransformProvider xfrm) {
+        lock.lock();
+        try {
+            frameTree.update(parentName, name, xfrm);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void update(String parentName, String name, Transform xfrm) {
+        update(parentName, name, new FixedTransformProvider(xfrm));
+    }
+
+    @Override
+    public void update(String parentName, String name, Pose pose) {
+        update(parentName, name, Frames.makeTransform(pose));
+    }
+
+    @Override
     public void remove(String name) {
         lock.lock();
         try {

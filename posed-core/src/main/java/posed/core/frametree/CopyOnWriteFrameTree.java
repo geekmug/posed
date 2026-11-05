@@ -244,6 +244,38 @@ public final class CopyOnWriteFrameTree implements FrameTree {
     }
 
     @Override
+    public void update(String parentName, String name, TransformProvider xfrm) {
+        checkNotNull(parentName);
+        checkNotNull(name);
+        checkNotNull(xfrm);
+
+        lock.lock();
+        try {
+            State state = stateRef.get();
+            Frame frame = state.frames.get(name);
+            checkArgument(frame != null, "frame is not defined");
+
+            Frame parent = state.frames.get(parentName);
+            checkArgument(parent != null && frame.getParent() == parent,
+                    "frame is not attached to the given parent");
+
+            copyAndEdit(new UpdateStateOperation(frame, xfrm));
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    @Override
+    public void update(String parentName, String name, Transform xfrm) {
+        update(parentName, name, new FixedTransformProvider(xfrm));
+    }
+
+    @Override
+    public void update(String parentName, String name, Pose pose) {
+        update(parentName, name, Frames.makeTransform(pose));
+    }
+
+    @Override
     public void create(String parentName, String name, Pose pose) {
         create(parentName, name, Frames.makeTransform(pose));
     }

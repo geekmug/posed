@@ -74,6 +74,42 @@ public interface FrameTree {
     void create(String parentName, String name, Pose pose);
 
     /**
+     * Updates a frame that is already attached to a given parent.
+     *
+     * <p>All transform providers should be immutable to maintain the coherency
+     * of operations on this frame tree.
+     *
+     * @param parentName name of the parent frame
+     * @param name name of the frame to update
+     * @param xfrm transform provider describing the frame
+     * @throws IllegalArgumentException if the frame is not defined or is not
+     *     attached to the given parent
+     */
+    void update(String parentName, String name, TransformProvider xfrm);
+
+    /**
+     * Updates a frame that is already attached to a given parent.
+     *
+     * @param parentName name of the parent frame
+     * @param name name of the frame to update
+     * @param xfrm transform describing the frame
+     * @throws IllegalArgumentException if the frame is not defined or is not
+     *     attached to the given parent
+     */
+    void update(String parentName, String name, Transform xfrm);
+
+    /**
+     * Updates a frame that is already attached to a given parent.
+     *
+     * @param parentName name of the parent frame
+     * @param name name of the frame to update
+     * @param pose pose describing the frame
+     * @throws IllegalArgumentException if the frame is not defined or is not
+     *     attached to the given parent
+     */
+    void update(String parentName, String name, Pose pose);
+
+    /**
      * Removes a frame from the frame tree if present.
      *
      * <p>If the frame is currently a parent to other frames, then this is an

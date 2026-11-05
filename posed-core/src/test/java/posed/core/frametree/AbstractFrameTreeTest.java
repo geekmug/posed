@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.hipparchus.geometry.euclidean.threed.Vector3D;
 import org.junit.Test;
+import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
 import org.orekit.frames.FramesFactory;
 import org.orekit.frames.Transform;
@@ -177,6 +178,107 @@ public abstract class AbstractFrameTreeTest {
         Frame b = tree.get("B");
         tree.create("A", "C", new Pose(new Vector3D(1, 1, 1), NauticalAngles.IDENTITY));
         assertThat(tree.get("B"), is(sameInstance(b)));
+    }
+
+    @Test
+    public void testUpdate() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.update("A", "B", new FixedTransformProvider(
+                new Transform(AbsoluteDate.PAST_INFINITY, new Vector3D(1, 2, 3))));
+        Vector3D translation = tree.get("B")
+                .getTransformProvider()
+                .getTransform(AbsoluteDate.PAST_INFINITY)
+                .getTranslation();
+        assertThat(translation, is(equalTo(new Vector3D(1, 2, 3))));
+    }
+
+    @Test
+    public void testUpdateWithTransform() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.update("A", "B", new Transform(AbsoluteDate.PAST_INFINITY, new Vector3D(1, 2, 3)));
+        Vector3D translation = tree.get("B")
+                .getTransformProvider()
+                .getTransform(AbsoluteDate.PAST_INFINITY)
+                .getTranslation();
+        assertThat(translation, is(equalTo(new Vector3D(1, 2, 3))));
+    }
+
+    @Test
+    public void testUpdateWithPose() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.update("A", "B", new Pose(new Vector3D(1, 1, 1), NauticalAngles.IDENTITY));
+        Vector3D translation = tree.get("B")
+                .getTransformProvider()
+                .getTransform(AbsoluteDate.PAST_INFINITY)
+                .getTranslation();
+        assertThat(translation, is(equalTo(new Vector3D(-1, -1, -1))));
+    }
+
+    @Test
+    public void testUpdateMakesNewChild() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.create("B", "C", Pose.IDENTITY);
+        Frame c = tree.get("C");
+        tree.update("A", "B", TransformProviderUtils.IDENTITY_PROVIDER);
+        assertThat(tree.get("C"), is(not(sameInstance(c))));
+        assertThat(tree.get("C").getParent(), is(sameInstance(tree.get("B"))));
+    }
+
+    @Test
+    public void testUpdateDoesNotCreate() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.update("A", "B", TransformProviderUtils.IDENTITY_PROVIDER);
+        });
+        assertThat(tree.get("B"), is(nullValue()));
+    }
+
+    @Test
+    public void testUpdateRemovedFrame() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.remove("A");
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.update("GCRF", "A", TransformProviderUtils.IDENTITY_PROVIDER);
+        });
+        assertThat(tree.get("A"), is(nullValue()));
+    }
+
+    @Test
+    public void testUpdateWithDifferentParent() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        tree.create("A", "B", Pose.IDENTITY);
+        tree.create("B", "C", Pose.IDENTITY);
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.update("A", "C", TransformProviderUtils.IDENTITY_PROVIDER);
+        });
+    }
+
+    @Test
+    public void testUpdateWithUnknownParent() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        tree.createRoot("A");
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.update("unknown", "A", TransformProviderUtils.IDENTITY_PROVIDER);
+        });
+    }
+
+    @Test
+    public void testUpdateRootFrame() {
+        FrameTree tree = newFrameTree(FramesFactory.getGCRF());
+        assertThrows(IllegalArgumentException.class, () -> {
+            tree.update("GCRF", "GCRF", TransformProviderUtils.IDENTITY_PROVIDER);
+        });
     }
 
     @Test

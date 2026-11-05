@@ -159,6 +159,30 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
     }
 
     @Override
+    public void update(String parentName, String name, TransformProvider xfrm) {
+        synchronized (changeMonitor) {
+            delegate.update(parentName, name, xfrm);
+            emitCreates(name);
+        }
+    }
+
+    @Override
+    public void update(String parentName, String name, Transform xfrm) {
+        synchronized (changeMonitor) {
+            delegate.update(parentName, name, xfrm);
+            emitCreates(name);
+        }
+    }
+
+    @Override
+    public void update(String parentName, String name, Pose pose) {
+        synchronized (changeMonitor) {
+            delegate.update(parentName, name, pose);
+            emitCreates(name);
+        }
+    }
+
+    @Override
     public void remove(String name) {
         synchronized (changeMonitor) {
             delegate.remove(name);
