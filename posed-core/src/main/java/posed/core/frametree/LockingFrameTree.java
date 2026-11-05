@@ -20,13 +20,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
 
 import java.util.concurrent.locks.ReentrantLock;
 
-import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
-import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
-
-import posed.core.Frames;
-import posed.core.Pose;
 
 /**
  * A mutable tree of frames using a ReentrantLock for coherence.
@@ -125,18 +120,6 @@ public final class LockingFrameTree implements FrameTree {
     }
 
     @Override
-    public void create(String parentName, String name,
-            Transform xfrm) {
-        create(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
-    public void create(String parentName, String name,
-            Pose pose) {
-        create(parentName, name, Frames.makeTransform(pose));
-    }
-
-    @Override
     public void update(String parentName, String name, TransformProvider xfrm) {
         lock.lock();
         try {
@@ -144,16 +127,6 @@ public final class LockingFrameTree implements FrameTree {
         } finally {
             lock.unlock();
         }
-    }
-
-    @Override
-    public void update(String parentName, String name, Transform xfrm) {
-        update(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
-    public void update(String parentName, String name, Pose pose) {
-        update(parentName, name, Frames.makeTransform(pose));
     }
 
     @Override

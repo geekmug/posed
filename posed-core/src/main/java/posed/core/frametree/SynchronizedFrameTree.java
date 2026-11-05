@@ -22,9 +22,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 
-import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
-import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 
 import com.google.common.collect.ImmutableList;
@@ -32,8 +30,6 @@ import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.MutableGraph;
 import com.google.common.graph.Traverser;
 
-import posed.core.Frames;
-import posed.core.Pose;
 import posed.core.UnknownTransformProvider;
 
 /**
@@ -197,43 +193,6 @@ public final class SynchronizedFrameTree implements FrameTree {
                 "frame is not attached to the given parent");
 
         replace(parent, update, xfrm);
-    }
-
-    @Override
-    public void update(String parentName, String name, Transform xfrm) {
-        checkNotNull(parentName);
-        checkNotNull(name);
-        checkNotNull(xfrm);
-
-        update(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
-    public void update(String parentName, String name, Pose pose) {
-        checkNotNull(parentName);
-        checkNotNull(name);
-        checkNotNull(pose);
-
-        update(parentName, name, Frames.makeTransform(pose));
-    }
-
-    @Override
-    public void create(String parentName, String name, Transform xfrm) {
-        checkNotNull(parentName);
-        checkNotNull(name);
-        checkNotNull(xfrm);
-
-        create(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
-    public void create(String parentName, String name,
-            Pose pose) {
-        checkNotNull(parentName);
-        checkNotNull(name);
-        checkNotNull(pose);
-
-        create(parentName, name, Frames.makeTransform(pose));
     }
 
     @Override

@@ -26,9 +26,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import javax.annotation.concurrent.GuardedBy;
 
-import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
-import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 
 import com.google.common.collect.ImmutableList;
@@ -36,8 +34,6 @@ import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.MutableGraph;
 import com.google.common.graph.Traverser;
 
-import posed.core.Frames;
-import posed.core.Pose;
 import posed.core.UnknownTransformProvider;
 
 /**
@@ -239,11 +235,6 @@ public final class CopyOnWriteFrameTree implements FrameTree {
     }
 
     @Override
-    public void create(String parentName, String name, Transform xfrm) {
-        create(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
     public void update(String parentName, String name, TransformProvider xfrm) {
         checkNotNull(parentName);
         checkNotNull(name);
@@ -263,21 +254,6 @@ public final class CopyOnWriteFrameTree implements FrameTree {
         } finally {
             lock.unlock();
         }
-    }
-
-    @Override
-    public void update(String parentName, String name, Transform xfrm) {
-        update(parentName, name, new FixedTransformProvider(xfrm));
-    }
-
-    @Override
-    public void update(String parentName, String name, Pose pose) {
-        update(parentName, name, Frames.makeTransform(pose));
-    }
-
-    @Override
-    public void create(String parentName, String name, Pose pose) {
-        create(parentName, name, Frames.makeTransform(pose));
     }
 
     @Override

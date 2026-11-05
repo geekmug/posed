@@ -19,13 +19,11 @@ package posed.core.frametree;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import org.orekit.frames.Frame;
-import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Iterables;
 
-import posed.core.Pose;
 import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
@@ -143,41 +141,9 @@ public final class ChangeTrackingFrameTree<T extends FrameTree> implements Frame
     }
 
     @Override
-    public void create(String parentName, String name, Transform xfrm) {
-        synchronized (changeMonitor) {
-            delegate.create(parentName, name, xfrm);
-            emitCreates(name);
-        }
-    }
-
-    @Override
-    public void create(String parentName, String name, Pose pose) {
-        synchronized (changeMonitor) {
-            delegate.create(parentName, name, pose);
-            emitCreates(name);
-        }
-    }
-
-    @Override
     public void update(String parentName, String name, TransformProvider xfrm) {
         synchronized (changeMonitor) {
             delegate.update(parentName, name, xfrm);
-            emitCreates(name);
-        }
-    }
-
-    @Override
-    public void update(String parentName, String name, Transform xfrm) {
-        synchronized (changeMonitor) {
-            delegate.update(parentName, name, xfrm);
-            emitCreates(name);
-        }
-    }
-
-    @Override
-    public void update(String parentName, String name, Pose pose) {
-        synchronized (changeMonitor) {
-            delegate.update(parentName, name, pose);
             emitCreates(name);
         }
     }

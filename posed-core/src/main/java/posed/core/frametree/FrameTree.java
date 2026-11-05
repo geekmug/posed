@@ -16,10 +16,14 @@
 
 package posed.core.frametree;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+import org.orekit.frames.FixedTransformProvider;
 import org.orekit.frames.Frame;
 import org.orekit.frames.Transform;
 import org.orekit.frames.TransformProvider;
 
+import posed.core.Frames;
 import posed.core.Pose;
 
 /** A mutable tree of frames. */
@@ -59,7 +63,9 @@ public interface FrameTree {
      * @param name name of the new frame
      * @param xfrm transform describing the new frame
      */
-    void create(String parentName, String name, Transform xfrm);
+    default void create(String parentName, String name, Transform xfrm) {
+        create(parentName, name, new FixedTransformProvider(checkNotNull(xfrm)));
+    }
 
     /**
      * Creates (or updates) a frame attach to a given parent.
@@ -71,7 +77,9 @@ public interface FrameTree {
      * @param name name of the new frame
      * @param pose pose describing the new frame
      */
-    void create(String parentName, String name, Pose pose);
+    default void create(String parentName, String name, Pose pose) {
+        create(parentName, name, Frames.makeTransform(pose));
+    }
 
     /**
      * Updates a frame that is already attached to a given parent.
@@ -96,7 +104,9 @@ public interface FrameTree {
      * @throws IllegalArgumentException if the frame is not defined or is not
      *     attached to the given parent
      */
-    void update(String parentName, String name, Transform xfrm);
+    default void update(String parentName, String name, Transform xfrm) {
+        update(parentName, name, new FixedTransformProvider(checkNotNull(xfrm)));
+    }
 
     /**
      * Updates a frame that is already attached to a given parent.
@@ -107,7 +117,9 @@ public interface FrameTree {
      * @throws IllegalArgumentException if the frame is not defined or is not
      *     attached to the given parent
      */
-    void update(String parentName, String name, Pose pose);
+    default void update(String parentName, String name, Pose pose) {
+        update(parentName, name, Frames.makeTransform(pose));
+    }
 
     /**
      * Removes a frame from the frame tree if present.
