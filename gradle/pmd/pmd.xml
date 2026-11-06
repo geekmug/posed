@@ -27,7 +27,6 @@ Custom ruleset for our projects.
   <rule ref="category/java/errorprone.xml/AvoidMultipleUnaryOperators" />
   <rule ref="category/java/errorprone.xml/AvoidUsingOctalValues" />
   <rule ref="category/java/errorprone.xml/BrokenNullCheck" />
-  <rule ref="category/java/errorprone.xml/CheckSkipResult" />
   <rule ref="category/java/errorprone.xml/ClassCastExceptionWithToArray" />
   <rule ref="category/java/errorprone.xml/DontUseFloatTypeForLoopIndices" />
   <rule ref="category/java/errorprone.xml/JumbledIncrementer" />
@@ -42,12 +41,12 @@ Custom ruleset for our projects.
 
   <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP" />
   <rule ref="category/java/bestpractices.xml/CheckResultSet" />
+  <rule ref="category/java/bestpractices.xml/PrimitiveWrapperInstantiation" />
 
   <rule ref="category/java/codestyle.xml/ExtendsObject" />
   <rule ref="category/java/codestyle.xml/ForLoopShouldBeWhileLoop" />
 
   <rule ref="category/java/performance.xml/BigIntegerInstantiation" />
-  <rule ref="category/java/performance.xml/BooleanInstantiation" />
 
   <rule ref="category/java/design.xml/CollapsibleIfStatements" />
   <rule ref="category/java/design.xml/SimplifiedTernary" />
@@ -57,7 +56,7 @@ Custom ruleset for our projects.
         language="java"
         message="Do not throw exceptions from main methods, catch and handle them instead."
         externalInfoUrl="https://softwareengineering.stackexchange.com/a/257184"
-        class="net.sourceforge.pmd.lang.rule.XPathRule">
+        class="net.sourceforge.pmd.lang.rule.xpath.XPathRule">
     <description>
 Don't throw exceptions from main methods, catch and handle them instead.
 Exceptions thrown from main methods are have an undefined behavior.
@@ -65,7 +64,7 @@ Exceptions thrown from main methods are have an undefined behavior.
     <properties>
       <property name="xpath">
         <value><![CDATA[
-          //MethodDeclaration[@Public='true' and @Static='true' and MethodDeclarator[@Name='main']]//NameList
+          //MethodDeclaration[pmd-java:modifiers() = 'public' and pmd-java:modifiers() = 'static' and @Name='main']/ThrowsList
         ]]></value>
       </property>
     </properties>

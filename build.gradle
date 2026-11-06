@@ -28,6 +28,7 @@ buildscript {
     classpath group: 'ca.cutterslade.gradle', name: 'gradle-dependency-analyze', version: gradleDependencyAnalyzeVersion
     classpath group: 'com.adarshr', name: 'gradle-test-logger-plugin', version: gradleTestLoggerPluginVersion
     classpath group: 'com.benjaminsproule.license', name: 'com.benjaminsproule.license.gradle.plugin', version: licenseGradlePluginVersion
+    classpath group: 'com.github.spotbugs.snom', name: 'spotbugs-gradle-plugin', version: spotbugsGradlePluginVersion
     classpath group: 'com.google.protobuf', name: 'protobuf-gradle-plugin', version: protobufGradlePluginVersion
     classpath group: 'io.spring.gradle', name: 'dependency-management-plugin', version: springDependencyManagementPluginVersion
     classpath group: 'net.ltgt.gradle', name: 'gradle-errorprone-plugin', version: errorpronePluginVersion
@@ -54,6 +55,7 @@ allprojects {
   dependencyManagement {
     imports {
       mavenBom "io.grpc:grpc-bom:${grpcVersion}"
+      mavenBom "com.google.protobuf:protobuf-bom:${protocVersion}"
       mavenBom "com.linecorp.armeria:armeria-bom:${armeriaVersion}"
       mavenBom "org.glassfish.jaxb:jaxb-bom:${jaxbVersion}"
       mavenBom "org.hipparchus:hipparchus:${hipparchusVersion}"
@@ -74,11 +76,25 @@ allprojects {
 
   afterEvaluate {
     if (configurations.findByName('spotbugs')) {
-      // Spotbugs relies on a newer version of slf4j, so we need to override the BOM
+      // Spotbugs relies on newer versions of slf4j and commons-lang3, so we need to override the BOM
       dependencyManagement {
         configurations(spotbugs) {
           imports {
             mavenBom "org.slf4j:slf4j-parent:${spotbugsSlf4jVersion}"
+          }
+          dependencies {
+            dependency "org.apache.commons:commons-lang3:${spotbugsCommonsLang3Version}"
+          }
+        }
+      }
+    }
+
+    if (configurations.findByName('pmd')) {
+      // PMD 7 relies on newer versions of commons-lang3 and gson, so we need to override the BOM
+      dependencyManagement {
+        configurations(pmd) {
+          imports {
+            mavenBom "net.sourceforge.pmd:pmd:${pmdVersion}"
           }
         }
       }
@@ -171,11 +187,11 @@ project(':posed-protos') {
       delete generatedFilesBaseDir
     }
     protoc {
-      artifact = 'com.google.protobuf:protoc'
+      artifact = "com.google.protobuf:protoc:${protocVersion}"
     }
     plugins {
       grpc {
-        artifact = "io.grpc:protoc-gen-grpc-java"
+        artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
       }
     }
     generateProtoTasks {
@@ -351,7 +367,7 @@ dependencies {
   runtimeOnly project(':posed-service')
 }
 bootJar {
-  baseName = 'posed'
+  archiveBaseName = 'posed'
 }
 task runBootJar(type: JavaExec) {
   classpath = files(tasks.bootJar)

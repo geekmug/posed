@@ -72,7 +72,7 @@ allprojects {
 
   // Define a sources jar for publishing.
   task sourcesJar(type: Jar, dependsOn: classes) {
-    classifier = 'sources'
+    archiveClassifier = 'sources'
     from sourceSets.main.allSource
   }
   publish {
@@ -81,7 +81,7 @@ allprojects {
 
   // Define a javadoc jar for publishing.
   task javadocJar(type: Jar, dependsOn: javadoc) {
-    classifier = 'javadoc'
+    archiveClassifier = 'javadoc'
     from javadoc.destinationDir
   }
   publish {
@@ -97,7 +97,7 @@ allprojects {
    */
   configurations.create('test').extendsFrom(configurations.testRuntimeClasspath)
   task testJar(type: Jar) {
-    classifier = 'test'
+    archiveClassifier = 'test'
     from sourceSets.test.output
   }
   artifacts {
@@ -142,7 +142,7 @@ allprojects {
   // Enable various code quality checkers.
   apply plugin: 'ru.vyarus.quality'
   quality {
-    configDir = rootProject.file('gradle')
+    configDir = rootProject.file('gradle').absolutePath
 
     checkstyleVersion = property('checkstyleVersion')
     pmdVersion = property('pmdVersion')
@@ -167,6 +167,17 @@ allprojects {
       }
     }
   }
+  // Give PMD the toolchain's JDK classes so it doesn't fall back to the JVM running Gradle.
+  def pmdJdkClasses = javaToolchains.launcherFor(java.toolchain).map { launcher ->
+    def home = launcher.metadata.installationPath
+    [home.file('jre/lib/rt.jar'), home.file('lib/jrt-fs.jar')].find { it.asFile.exists() }
+  }
+  afterEvaluate {
+    tasks.withType(Pmd).configureEach {
+      classpath = classpath + files(pmdJdkClasses)
+    }
+  }
+
   task checkQuality {}
   project.sourceSets.each { set -> checkQuality.dependsOn(set.getTaskName('checkQuality', null)) }
   project.check.dependsOn(project.checkQuality)
@@ -179,9 +190,9 @@ allprojects {
   }
   jacocoTestReport {
     reports {
-      csv.enabled = false
-      xml.enabled = false
-      html.destination = file("${buildDir}/jacocoHtml")
+      csv.required = false
+      xml.required = false
+      html.outputLocation = file("${buildDir}/jacocoHtml")
     }
   }
   jacocoTestReport.dependsOn(project.test)
